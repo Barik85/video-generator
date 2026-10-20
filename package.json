@@ -9,13 +9,19 @@
   "scripts": {
     "reel": "tsx apps/cli/src/main.ts",
     "typecheck": "tsc -p packages/core && tsc -p apps/cli",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:ui": "concurrently -k -n api,web -c blue,magenta \"npm run start -w @reel/api\" \"npm run dev -w @reel/web\"",
+    "dev:ui:fake": "REEL_RUNNER=fake npm run dev:ui",
+    "fake-runs": "npm run fake-runs -w @reel/api",
+    "typecheck:ui": "tsc -p apps/api && tsc -p apps/web",
+    "build:ui": "npm run build -w @reel/web"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "concurrently": "^10.0.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

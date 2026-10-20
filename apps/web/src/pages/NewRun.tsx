@@ -1,0 +1,227 @@
+import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api.ts";
+import { estimate, modelFor, usd } from "../lib/pricing.ts";
+import { lockedLines, shellQuote, words } from "../lib/text.ts";
+import { plural } from "../lib/format.ts";
+import { Card, ErrorBox, Icon, Spinner, buttonClass } from "../components/ui.tsx";
+
+const DURATIONS = [8, 15, 20, 30] as const;
+const DEFAULT_IDEA =
+  "Нічна заправка під дощем. Дівчина в червоному плащі простягає касиру конверт і каже: «Ти знаєш, що там. Не відкривай до ранку.»";
+
+const HITL = [
+  { title: "Затвердити сценарій перед рендером", hint: "Найдешевша точка: правка тексту коштує центи, а правка відео — долари." },
+  { title: "Затвердити ключові кадри", hint: "Перевірка персонажа й локації до генерації відео." },
+  { title: "Авто-ретрай при провалі QA (до 2 разів)", hint: "Перегенеровується лише шот, що впав; аудіо й сценарій не змінюються." },
+];
+
+const choice = (selected: boolean) =>
+  selected ? "border-accent bg-accent-bg text-fg font-semibold" : "border-line-strong bg-ground text-soft hover:border-muted";
+
+export function NewRunPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
+  const presets = meta.data?.presets ?? ["mock", "seedance-fast", "seedance-2.5"];
+
+  const [idea, setIdea] = useState(DEFAULT_IDEA);
+  const [seconds, setSeconds] = useState<number>(15);
+  const [preset, setPreset] = useState("seedance-fast");
+  const [budget, setBudget] = useState("8");
+
+  const budgetUsd = Number(budget);
+  const est = estimate(preset, seconds);
+  const model = modelFor(preset);
+  const locked = lockedLines(idea);
+  const lockedWords = locked.reduce((a, l) => a + words(l).length, 0);
+  const valid = idea.trim().length > 0 && Number.isFinite(budgetUsd) && budgetUsd > 0;
+
+  const create = useMutation({
+    mutationFn: () => api.create({ idea: idea.trim(), targetSeconds: seconds, preset, budgetUsd }),
+    onSuccess: ({ runId }) => {
+      void qc.invalidateQueries({ queryKey: ["runs"] });
+      void navigate(`/runs/${runId}`);
+    },
+  });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (valid && !create.isPending) create.mutate();
+  };
+
+  const cli = `npm run reel -- run --idea ${shellQuote(idea.trim())} --seconds ${seconds} --preset ${preset} --budget ${Number.isFinite(budgetUsd) ? budgetUsd : 8}`;
+
+  return (
+    <main className="mx-auto max-w-[1280px] px-4 pb-16 pt-8 sm:px-6">
+      <div className="mb-7">
+        <h1 className="mb-1.5 text-[28px] font-bold tracking-tight">Нова генерація</h1>
+        <p className="max-w-[680px] text-muted">
+          Ідея з 1–3 речень → сценарій → вертикальне відео 8–30 с. Репліки в «лапках» залишаються дослівними: їх ніхто не перефразовує.
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="flex flex-wrap items-start gap-6">
+        <section aria-label="Run settings" className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
+          <Card as="div" className="flex flex-col gap-3">
+            <label htmlFor="idea" className="font-semibold">
+              Ідея
+            </label>
+            <textarea
+              id="idea"
+              rows={4}
+              required
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              className="w-full resize-y rounded-[10px] border border-line-strong bg-ground p-3.5 leading-relaxed text-fg"
+            />
+            <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted" aria-live="polite">
+              {locked.length > 0 ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-bd bg-accent-bg px-2.5 py-1 text-accent-hi">
+                    <Icon.Lock />
+                    {locked.length} locked {locked.length === 1 ? "line" : "lines"} · {lockedWords} {plural(lockedWords, ["слово", "слова", "слів"])}
+                  </span>
+                  <span>Озвучка: {locked.map((l) => `«${l}»`).join(" ")}</span>
+                </>
+              ) : (
+                <span>Немає реплік у лапках — діалог напише LLM.</span>
+              )}
+            </div>
+          </Card>
+
+          <Card as="div" className="flex flex-col gap-[22px]">
+            <div className="flex flex-col gap-2.5">
+              <div className="font-semibold" id="dur-label">
+                Тривалість
+              </div>
+              <div role="group" aria-labelledby="dur-label" className="flex flex-wrap gap-2">
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={d === seconds}
+                    onClick={() => setSeconds(d)}
+                    className={`min-h-11 min-w-[72px] rounded-[10px] border px-4 ${choice(d === seconds)}`}
+                  >
+                    {d} с
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <div className="font-semibold" id="preset-label">
+                Пресет (відео-модель)
+              </div>
+              <div role="group" aria-labelledby="preset-label" className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5">
+                {presets.map((p) => {
+                  const m = modelFor(p);
+                  const sel = p === preset;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      aria-pressed={sel}
+                      onClick={() => setPreset(p)}
+                      className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left ${sel ? "border-accent bg-accent-bg" : "border-line-strong bg-ground hover:border-muted"}`}
+                    >
+                      <span className="font-semibold text-fg">{m.name}</span>
+                      <span className={`text-[13px] ${sel ? "text-accent-hi" : "text-muted"}`}>{m.how}</span>
+                      <span className={`font-mono text-xs ${sel ? "text-soft" : "text-muted"}`}>
+                        {p} · {m.price}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3.5">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="budget" className="font-semibold">
+                  Ліміт бюджету, $
+                </label>
+                <input
+                  id="budget"
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className="min-h-11 rounded-[10px] border border-line-strong bg-ground px-3 text-fg"
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card as="div" className="flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-semibold">Точки human-in-the-loop</span>
+              <span className="rounded border border-line-strong px-1.5 text-xs text-muted">скоро</span>
+            </div>
+            <p className="-mt-2 text-[13px] text-muted">Пайплайн поки не має approval gates — опції з’являться, щойно ядро їх підтримає.</p>
+            {HITL.map((h, i) => (
+              <label key={h.title} className="flex cursor-not-allowed items-start gap-3 opacity-60">
+                <input type="checkbox" disabled defaultChecked={i !== 1} className="mt-0.5 h-5 w-5 accent-accent" />
+                <span>
+                  <span className="block font-medium">{h.title}</span>
+                  <span className="text-[13px] text-muted">{h.hint}</span>
+                </span>
+              </label>
+            ))}
+          </Card>
+        </section>
+
+        <aside aria-label="Estimate and launch" className="flex min-w-0 flex-[1_1_340px] flex-col gap-5">
+          <Card as="div" className="flex flex-col gap-3.5">
+            <div className="font-semibold">Оцінка вартості</div>
+            <div className="flex flex-col gap-2 text-sm">
+              {est.lines.map((l) => (
+                <div key={l.label} className="flex justify-between gap-3">
+                  <span className="text-muted">{l.label}</span>
+                  <span className="font-mono">{usd(l.usd)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-baseline justify-between border-t border-line pt-3">
+              <span className="font-semibold">Очікувано</span>
+              <span className="font-mono text-[22px] font-medium">{usd(est.total)}</span>
+            </div>
+            <div className="text-[13px] text-muted">
+              З двома ретраями найгірший випадок — {usd(est.worst)}. Run зупиниться, щойно перевищить ліміт.
+            </div>
+            {valid && est.total > budgetUsd && (
+              <div className="rounded-lg border border-warn-bd bg-warn-bg px-3 py-2 text-[13px] text-warn">
+                Оцінка {usd(est.total)} вища за ліміт {usd(budgetUsd)} — run, ймовірно, зупиниться до фіналу.
+              </div>
+            )}
+            <button type="submit" disabled={!valid || create.isPending} className={`${buttonClass.primary} min-h-12 rounded-xl text-base`}>
+              {create.isPending ? <Spinner /> : <Icon.Play />}
+              Запустити генерацію
+            </button>
+            {create.error && <ErrorBox error={create.error} />}
+          </Card>
+
+          <Card as="div" className="flex flex-col gap-3">
+            <div className="font-semibold">Що станеться</div>
+            <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-5 text-sm text-soft">
+              <li>Сценарій + shot plan (JSON-схема)</li>
+              <li>TTS кожної репліки (точний текст)</li>
+              <li>Ключові кадри персонажа</li>
+              <li>{model.step}</li>
+              <li>Склейка: аудіо завжди береться з TTS</li>
+              <li>QA: ASR-дослівність, тривалість, формат</li>
+            </ol>
+          </Card>
+
+          <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-panel p-5">
+            <div className="text-[13px] text-muted">Те саме з CLI</div>
+            <code className="whitespace-pre-wrap break-words font-mono text-[12.5px] text-soft">{cli}</code>
+          </div>
+        </aside>
+      </form>
+    </main>
+  );
+}

@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* Design tokens from the approved Reel Studio design (dark only). */
+@theme {
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-ground: #0f1012;
+  --color-panel: #131417;
+  --color-surface: #17181b;
+  --color-raised: #1f2024;
+  --color-placeholder: #22252b;
+  --color-line: #2a2c31;
+  --color-line-soft: #222428;
+  --color-line-strong: #34363c;
+  --color-line-dash: #3a3d44;
+
+  --color-fg: #ecedee;
+  --color-soft: #c9cbd0;
+  --color-muted: #a3a6ad;
+  --color-dim: #8e9198;
+  --color-faint: #6e7179;
+
+  --color-accent: #7aa7ff;
+  --color-accent-hi: #a9c6ff;
+  --color-accent-bg: #1c2433;
+  --color-accent-bd: #2d3b55;
+
+  --color-ok: #6bd9a3;
+  --color-ok-bg: #15291f;
+  --color-ok-bd: #23452f;
+  --color-warn: #f0a04b;
+  --color-warn-bg: #2e2414;
+  --color-warn-bd: #5a4220;
+  --color-fail: #ff8f8f;
+  --color-fail-bg: #2e1717;
+  --color-fail-bd: #5a2626;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: var(--color-ground);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  a {
+    color: var(--color-accent);
+  }
+  a:hover {
+    color: var(--color-accent-hi);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
