@@ -1,0 +1,31 @@
+import { fal } from "@fal-ai/client";
+import { PRESETS, type PresetName } from "../config.ts";
+import { AnthropicLlm } from "./anthropic.ts";
+import { FalElevenTts, FalScribeAsr, FalSeedreamImage, seedance20Fast, seedance25 } from "./fal.ts";
+import { MockAsr, MockImage, MockLlm, MockTts, MockVideo } from "./mock.ts";
+import type { Providers } from "./types.ts";
+
+export type { Providers } from "./types.ts";
+
+export function providersFor(presetName: string): Providers {
+  if (!(presetName in PRESETS)) throw new Error(`unknown preset "${presetName}"; known: ${Object.keys(PRESETS).join(", ")}`);
+  const p = PRESETS[presetName as PresetName];
+  if (p.video === "mock") {
+    return { llm: new MockLlm(), tts: new MockTts(), image: new MockImage(), video: new MockVideo(), asr: new MockAsr() };
+  }
+  requireEnv("FAL_KEY");
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) requireEnv("ANTHROPIC_API_KEY");
+  fal.config({ credentials: process.env.FAL_KEY });
+  return {
+    llm: new AnthropicLlm(),
+    tts: new FalElevenTts(),
+    image: new FalSeedreamImage(),
+    video: p.video === "fal-seedance-2.5" ? seedance25() : seedance20Fast(),
+    asr: new FalScribeAsr(),
+  };
+}
+
+function requireEnv(...names: string[]) {
+  const missing = names.filter((n) => !process.env[n]);
+  if (missing.length) throw new Error(`missing env: ${missing.join(", ")} (see .env.example)`);
+}
