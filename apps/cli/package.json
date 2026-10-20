@@ -1,0 +1,12 @@
+{
+  "name": "@reel/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "reel": "./src/main.ts"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8"
+  }
+}
