@@ -17,6 +17,8 @@ export function extractQuotedLines(idea: string): string[] {
 export function normalizeWords(text: string): string[] {
   return text
     .normalize("NFKC")
+    // ASR audio-event tags ("[rain falling]", "(door closes)") are not speech.
+    .replace(/\[[^\]]*\]|\([^)]*\)/g, " ")
     .toLowerCase()
     .replace(/[’'`ʼ]/g, "'")
     .replace(/[^\p{L}\p{N}'\s-]/gu, " ")

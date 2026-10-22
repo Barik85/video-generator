@@ -24,13 +24,13 @@ export interface RunStatusView {
 export function runStatus(m: Manifest, active: boolean): RunStatusView {
   const failedStage = STAGES.find((s) => m.stages[s]?.status === "failed");
   const runningStage = STAGES.find((s) => m.stages[s]?.status === "running");
-  if (m.status === "done") return { tone: "done", label: "Готово", stage: "QA passed", stale: false };
+  if (m.status === "done") return { tone: "done", label: "Done", stage: "QA passed", stale: false };
   if (m.status === "failed") {
     const err = failedStage ? m.stages[failedStage]?.error ?? "" : "";
-    if (failedStage === "qa") return { tone: "qa", label: "QA не пройдено", stage: err || "QA", stale: false };
+    if (failedStage === "qa") return { tone: "qa", label: "QA failed", stage: err || "QA", stale: false };
     return {
       tone: "fail",
-      label: "Впало",
+      label: "Failed",
       stage: failedStage ? `${STAGE_LABEL[failedStage]}: ${err}` : err || "—",
       stale: false,
     };
@@ -39,7 +39,7 @@ export function runStatus(m: Manifest, active: boolean): RunStatusView {
   const current = runningStage ?? STAGES.find((s) => m.stages[s]?.status !== "done");
   return {
     tone: stale ? "qa" : "run",
-    label: stale ? "Перервано?" : "Генерується",
+    label: stale ? "Interrupted?" : "Generating",
     stage: current ? STAGE_LABEL[current] : "—",
     stale,
   };

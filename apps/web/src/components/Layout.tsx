@@ -27,7 +27,7 @@ export function Layout() {
           </nav>
           <div className="flex items-center gap-2 font-mono text-xs text-muted">
             {meta.data?.runner === "fake" && (
-              <span className="rounded border border-warn-bd bg-warn-bg px-1.5 py-0.5 text-warn" title="REEL_RUNNER=fake: симульований пайплайн">
+              <span className="rounded border border-warn-bd bg-warn-bg px-1.5 py-0.5 text-warn" title="REEL_RUNNER=fake: simulated pipeline">
                 fake runner
               </span>
             )}

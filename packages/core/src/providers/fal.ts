@@ -84,6 +84,7 @@ export class FalSeedanceVideo implements VideoProvider {
     return `fal:${this.endpoint}`;
   }
   minSeconds = 4;
+  acceptsAudio = true;
 
   async generate({ prompt, imageFile, audioFile, seconds, outFile, seed }: Parameters<VideoProvider["generate"]>[0]) {
     const [imageUrl, audioUrl] = await Promise.all([upload(imageFile), audioFile ? upload(audioFile) : Promise.resolve(null)]);

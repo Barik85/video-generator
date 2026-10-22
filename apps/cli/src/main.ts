@@ -7,7 +7,7 @@ import { PRESETS, RunInput, RunStore, STAGES, resumeRun, startRun, type Manifest
 
 const USAGE = `reel — idea → vertical video
 
-  reel run --idea "..." [--seconds 15] [--preset mock|seedance-fast|seedance-2.5] [--budget 8]
+  reel run --idea "..." [--seconds 15] [--preset <name>] [--budget 8]
   reel run --idea-file idea.txt ...
   reel resume <runId> [--from <stage>]      stages: ${STAGES.join(", ")}
   reel ls

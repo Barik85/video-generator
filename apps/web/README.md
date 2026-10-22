@@ -37,8 +37,8 @@ Checks: `npm run typecheck:ui`, `npm run build:ui`.
   "running". `REEL_RUNNER=fake` uses the same simulator for runs started from the UI; the
   header shows a “fake runner” badge then.
 - Seedance 2.5 price is an estimate (Seedance 2.0 Standard rate) — no public price yet.
-- Human-in-the-loop checkboxes are rendered disabled (“скоро”): the core has no approval gates.
+- Human-in-the-loop checkboxes are rendered disabled ("soon"): the core has no approval gates.
 - Runs execute as in-process promises inside the API. If the API restarts, a run stays “running”
-  on disk (the list shows “Перервано?” after 10 min without updates) and can be continued with
+  on disk (the list shows "Interrupted?" after 10 min without updates) and can be continued with
   “resume”. Next step: a real queue + worker process; the API would only enqueue and serve files.
 - No auth, no DB: the `runs/` folder is the database.

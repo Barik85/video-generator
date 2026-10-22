@@ -73,6 +73,11 @@ export async function assemble(clips: string[], tracks: string[], output: string
   ]);
 }
 
+/** The model's own soundtrack of a clip, cut/padded to exactly `seconds` (native-audio mode). */
+export async function clipAudio(input: string, seconds: number, output: string) {
+  await ffmpeg(["-i", input, "-vn", "-af", "apad", "-t", String(seconds), "-ac", "1", "-ar", String(SR), output]);
+}
+
 export async function extractAudio(input: string, output: string) {
   await ffmpeg(["-i", input, "-vn", "-ac", "1", "-ar", "16000", output]);
 }

@@ -82,7 +82,16 @@ export type PlannedShot = z.infer<typeof PlannedShot>;
 
 // ---------- Stages 4–5: keyframes, video ----------
 
-export const ShotMedia = z.object({ shotId: z.string(), file: z.string(), attempts: z.number().int(), seed: z.number().nullable() });
+export const ShotMedia = z.object({
+  shotId: z.string(),
+  file: z.string(),
+  attempts: z.number().int(),
+  seed: z.number().nullable(),
+  /** Native-audio mode: the clip's own soundtrack, trimmed to the shot (used instead of the TTS track). */
+  audio: z.string().optional(),
+  /** Native-audio mode: WER of what ASR heard in the chosen take vs. the shot's lines. */
+  wer: z.number().nullable().optional(),
+});
 export const MediaOutput = z.object({ shots: z.array(ShotMedia) });
 export type MediaOutput = z.infer<typeof MediaOutput>;
 

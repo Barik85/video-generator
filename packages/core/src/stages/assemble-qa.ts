@@ -5,10 +5,14 @@ import type { StageContext } from "./context.ts";
 
 const MAX_WER = Number(process.env.REEL_MAX_WER ?? 0);
 
-/** Clips + dialogue tracks → final.mp4. The soundtrack is always our TTS, never model-generated speech. */
+/**
+ * Clips + dialogue tracks → final.mp4. In lip-sync mode the soundtrack is our verified TTS, never
+ * model-generated speech; in native-audio mode it is each clip's own (ASR-checked) audio.
+ */
 export async function assembleStage(ctx: StageContext, plan: PlanOutput, video: MediaOutput): Promise<AssembleOutput> {
-  const clips = plan.shots.map((p) => ctx.store.path(video.shots.find((v) => v.shotId === p.shotId)!.file));
-  const tracks = plan.shots.map((p) => ctx.store.path(p.track));
+  const media = plan.shots.map((p) => video.shots.find((v) => v.shotId === p.shotId)!);
+  const clips = media.map((m) => ctx.store.path(m.file));
+  const tracks = plan.shots.map((p, i) => ctx.store.path(media[i]!.audio ?? p.track));
   await assemble(clips, tracks, ctx.store.path("final.mp4"));
   const seconds = (await probe(ctx.store.path("final.mp4"))).seconds;
   await ctx.log("info", `final.mp4 assembled: ${seconds.toFixed(2)}s`);

@@ -3,6 +3,7 @@ import { PRESETS, type PresetName } from "../config.ts";
 import { AnthropicLlm } from "./anthropic.ts";
 import { FalElevenTts, FalScribeAsr, FalSeedreamImage, seedance20Fast, seedance25 } from "./fal.ts";
 import { MockAsr, MockImage, MockLlm, MockTts, MockVideo } from "./mock.ts";
+import { OpenRouterAsr, OpenRouterImage, OpenRouterLlm, OpenRouterTts, OpenRouterVideo } from "./openrouter.ts";
 import type { Providers } from "./types.ts";
 
 export type { Providers } from "./types.ts";
@@ -10,8 +11,27 @@ export type { Providers } from "./types.ts";
 export function providersFor(presetName: string): Providers {
   if (!(presetName in PRESETS)) throw new Error(`unknown preset "${presetName}"; known: ${Object.keys(PRESETS).join(", ")}`);
   const p = PRESETS[presetName as PresetName];
+  const providers = build(p);
+  if (p.audio === "lipsync" && !providers.video.acceptsAudio) {
+    throw new Error(`preset ${presetName}: ${providers.video.name} cannot take a reference audio track; use a native-audio preset`);
+  }
+  return providers;
+}
+
+function build(p: (typeof PRESETS)[PresetName]): Providers {
   if (p.video === "mock") {
     return { llm: new MockLlm(), tts: new MockTts(), image: new MockImage(), video: new MockVideo(), asr: new MockAsr() };
+  }
+  if (p.video.startsWith("openrouter:")) {
+    requireEnv("OPENROUTER_API_KEY");
+    const id = (s: string) => s.replace(/^openrouter:/, "");
+    return {
+      llm: new OpenRouterLlm(id(p.llm)),
+      tts: new OpenRouterTts(id(p.tts)),
+      image: new OpenRouterImage(id(p.image)),
+      video: new OpenRouterVideo(id(p.video)),
+      asr: new OpenRouterAsr(id(p.asr)),
+    };
   }
   requireEnv("FAL_KEY");
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) requireEnv("ANTHROPIC_API_KEY");

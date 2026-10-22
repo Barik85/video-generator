@@ -16,12 +16,12 @@ export type { Manifest, RunEvent, StageName, Script, QaOutput };
 export const STAGES = ["script", "voice", "plan", "keyframes", "video", "assemble", "qa"] as const satisfies readonly StageName[];
 
 export const STAGE_LABEL: Record<StageName, string> = {
-  script: "Сценарій",
-  voice: "Озвучка (TTS)",
+  script: "Script",
+  voice: "Voice (TTS)",
   plan: "Shot plan",
-  keyframes: "Ключові кадри",
-  video: "Відео",
-  assemble: "Склейка",
+  keyframes: "Keyframes",
+  video: "Video",
+  assemble: "Assembly",
   qa: "QA",
 };
 

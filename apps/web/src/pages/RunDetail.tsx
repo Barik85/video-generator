@@ -33,7 +33,7 @@ export function RunDetailPage() {
   if (run.isPending) {
     return (
       <main className="mx-auto max-w-[1280px] px-4 py-8 text-muted sm:px-6">
-        <Spinner /> Завантаження…
+        <Spinner /> Loading…
       </main>
     );
   }
@@ -75,7 +75,7 @@ function RunView({ detail, events, streamState, onResumed }: { detail: RunDetail
             <span className="font-mono text-[13px] text-muted">{m.runId}</span>
             <Badge tone={status.tone}>
               {m.status === "done" ? <Icon.Check size={14} /> : running ? <Spinner /> : null}
-              {m.status === "done" ? `Готово · QA ${outputs.qa?.pass === false ? "failed" : "passed"}` : status.label}
+              {m.status === "done" ? `Done · QA ${outputs.qa?.pass === false ? "failed" : "passed"}` : status.label}
             </Badge>
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{outputs.script?.title ?? m.input.idea.slice(0, 80)}</h1>
@@ -85,29 +85,29 @@ function RunView({ detail, events, streamState, onResumed }: { detail: RunDetail
           <ResumeControl m={m} disabled={running} onResumed={onResumed} />
           {finalFile ? (
             <a href={fileUrl(m.runId, finalFile, true)} className={buttonClass.primary} download>
-              Завантажити final.mp4
+              Download final.mp4
             </a>
           ) : (
             <button type="button" disabled className={buttonClass.primary}>
-              Завантажити final.mp4
+              Download final.mp4
             </button>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
-        <Stat label="Тривалість">{seconds !== null ? secs(seconds) : `ціль ${m.input.targetSeconds} с`}</Stat>
-        <Stat label="Вартість / ліміт" tone={costRatio > 1 ? "fail" : costRatio > 0.8 ? "warn" : undefined}>
+        <Stat label="Duration">{seconds !== null ? secs(seconds) : `target ${m.input.targetSeconds} s`}</Stat>
+        <Stat label="Cost / limit" tone={costRatio > 1 ? "fail" : costRatio > 0.8 ? "warn" : undefined}>
           {usd(m.cost.totalUsd)} <span className="text-sm text-muted">/ {usd(m.input.budgetUsd)}</span>
-          <div className="mt-1.5 h-1 overflow-hidden rounded bg-line" role="progressbar" aria-label="Витрачено бюджету" aria-valuenow={Math.round(costRatio * 100)} aria-valuemin={0} aria-valuemax={100}>
+          <div className="mt-1.5 h-1 overflow-hidden rounded bg-line" role="progressbar" aria-label="Budget spent" aria-valuenow={Math.round(costRatio * 100)} aria-valuemin={0} aria-valuemax={100}>
             <div className={`h-full ${costRatio > 1 ? "bg-fail" : costRatio > 0.8 ? "bg-warn" : "bg-accent"}`} style={{ width: `${Math.min(100, costRatio * 100)}%` }} />
           </div>
         </Stat>
-        <Stat label="Час виконання">{formatDuration(elapsed)}</Stat>
-        <Stat label="Ретраї">
+        <Stat label="Elapsed">{formatDuration(elapsed)}</Stat>
+        <Stat label="Retries">
           {retries} {retryWhere && <span className="text-sm text-muted">{retryWhere}</span>}
         </Stat>
-        <Stat label="Дослівність (WER)" tone={wer == null ? undefined : wer === 0 ? "ok" : "fail"}>
+        <Stat label="Verbatim (WER)" tone={wer == null ? undefined : wer === 0 ? "ok" : "fail"}>
           {wer == null ? "—" : wer.toFixed(2)}
         </Stat>
       </div>
@@ -123,8 +123,8 @@ function RunView({ detail, events, streamState, onResumed }: { detail: RunDetail
           <FinalVideo detail={detail} />
           <Verbatim detail={detail} />
           <QaChecks detail={detail} />
-          <Card title="Артефакти" className="flex flex-col">
-            {files.length === 0 && <p className="text-sm text-muted">Поки порожньо.</p>}
+          <Card title="Artifacts" className="flex flex-col">
+            {files.length === 0 && <p className="text-sm text-muted">Nothing yet.</p>}
             <ul className="m-0 flex list-none flex-col p-0">
               {files.map((f) => (
                 <li key={f.path}>
@@ -166,7 +166,7 @@ function ResumeControl({ m, disabled, onResumed }: { m: Manifest; disabled: bool
     <div className="flex flex-col items-end gap-1">
       <div className="flex flex-wrap gap-2">
         <label htmlFor="resume-from" className="sr-only">
-          Етап, з якого перезапустити
+          Stage to restart from
         </label>
         <select
           id="resume-from"
@@ -175,7 +175,7 @@ function ResumeControl({ m, disabled, onResumed }: { m: Manifest; disabled: bool
           disabled={disabled || resume.isPending}
           className="min-h-11 rounded-[10px] border border-line-strong bg-ground px-3 text-fg disabled:opacity-50"
         >
-          <option value="">перший незавершений</option>
+          <option value="">first unfinished</option>
           {STAGES.map((s, i) => (
             <option key={s} value={s}>
               {i + 1} · {STAGE_LABEL[s]}
@@ -184,7 +184,7 @@ function ResumeControl({ m, disabled, onResumed }: { m: Manifest; disabled: bool
         </select>
         <button type="button" onClick={() => resume.mutate()} disabled={disabled || resume.isPending} className={buttonClass.secondary}>
           {resume.isPending && <Spinner />}
-          Перезапустити з етапу
+          Restart from stage
         </button>
       </div>
       {resume.error && <span className="text-[13px] text-fail">{resume.error.message}</span>}
@@ -199,10 +199,10 @@ function StageTimeline({ m, events, streamState, now }: { m: Manifest; events: R
     <Card
       title={
         <span className="flex items-center justify-between gap-3">
-          Етапи
+          Stages
           <span className="flex items-center gap-1.5 text-xs font-normal text-muted" aria-live="polite">
             <span className={`h-2 w-2 rounded-full ${streamState === "live" ? "bg-ok" : streamState === "error" ? "bg-fail" : "bg-faint"}`} />
-            {streamState === "live" ? "live" : streamState === "ended" ? "завершено" : streamState === "error" ? "немає з’єднання" : "підключення…"}
+            {streamState === "live" ? "live" : streamState === "ended" ? "ended" : streamState === "error" ? "disconnected" : "connecting…"}
           </span>
         </span>
       }
@@ -217,7 +217,7 @@ function StageTimeline({ m, events, streamState, now }: { m: Manifest; events: R
           const dur = rec?.startedAt ? (rec.finishedAt ? Date.parse(rec.finishedAt) : st === "running" ? now : NaN) - Date.parse(rec.startedAt) : NaN;
           const last = [...stageEvents].reverse().find((e) => e.type !== "cost");
           const detail = st === "failed" ? rec?.error : last?.message;
-          const meta = [Number.isFinite(dur) ? formatDuration(dur) : null, cost > 0 ? usd(cost) : null, (rec?.attempts ?? 0) > 1 ? `спроба ${rec?.attempts}` : null]
+          const meta = [Number.isFinite(dur) ? formatDuration(dur) : null, cost > 0 ? usd(cost) : null, (rec?.attempts ?? 0) > 1 ? `attempt ${rec?.attempts}` : null]
             .filter(Boolean)
             .join(" · ");
           return (
@@ -228,7 +228,7 @@ function StageTimeline({ m, events, streamState, now }: { m: Manifest; events: R
                   <span className={`font-medium ${st === "pending" ? "text-muted" : ""}`}>
                     {i + 1} · {STAGE_LABEL[s]}
                   </span>
-                  <span className="font-mono text-[12.5px] text-muted">{meta || (st === "pending" ? "очікує" : "")}</span>
+                  <span className="font-mono text-[12.5px] text-muted">{meta || (st === "pending" ? "pending" : "")}</span>
                 </div>
                 {detail && <div className={`text-[13px] ${st === "failed" ? "text-fail" : "text-muted"}`}>{detail}</div>}
               </div>
@@ -244,30 +244,30 @@ function StageIcon({ status, retried }: { status: string; retried: boolean }) {
   const base = "flex h-6 w-6 flex-none items-center justify-center rounded-full border";
   if (status === "done" && retried)
     return (
-      <span className={`${base} border-warn-bd bg-warn-bg text-warn`} title="Готово після ретраю">
+      <span className={`${base} border-warn-bd bg-warn-bg text-warn`} title="Done after retry">
         <Icon.Retry />
       </span>
     );
   if (status === "done")
     return (
-      <span className={`${base} border-ok-bd bg-ok-bg text-ok`} title="Готово">
+      <span className={`${base} border-ok-bd bg-ok-bg text-ok`} title="Done">
         <Icon.Check />
       </span>
     );
   if (status === "running")
     return (
-      <span className={`${base} border-accent-bd bg-accent-bg text-accent`} title="Виконується">
+      <span className={`${base} border-accent-bd bg-accent-bg text-accent`} title="Running">
         <Spinner />
       </span>
     );
   if (status === "failed")
     return (
-      <span className={`${base} border-fail-bd bg-fail-bg text-fail`} title="Помилка">
+      <span className={`${base} border-fail-bd bg-fail-bg text-fail`} title="Error">
         <Icon.X />
       </span>
     );
   return (
-    <span className={`${base} border-line-strong bg-ground text-faint`} title="Очікує">
+    <span className={`${base} border-line-strong bg-ground text-faint`} title="Pending">
       <Icon.Dot size={10} />
     </span>
   );
@@ -280,8 +280,8 @@ function Shots({ detail }: { detail: RunDetail }) {
   const script = outputs.script;
   const v = (stage: StageName) => m.stages[stage]?.finishedAt ?? "";
   return (
-    <Card title="Шоти" className="flex flex-col">
-      {!script && <p className="text-sm text-muted">Шоти з’являться після етапу «Сценарій».</p>}
+    <Card title="Shots" className="flex flex-col">
+      {!script && <p className="text-sm text-muted">Shots appear after the "Script" stage.</p>}
       <div className="flex flex-col gap-3.5">
         {script?.shots.map((shot, i) => {
           const plan = outputs.plan?.shots.find((p) => p.shotId === shot.id);
@@ -296,7 +296,7 @@ function Shots({ detail }: { detail: RunDetail }) {
             <article key={shot.id} className="flex flex-wrap gap-4 rounded-xl border border-line bg-panel p-3.5" aria-label={`Shot ${i + 1}`}>
               <div className="flex gap-2">
                 <Thumb label={`keyframe ${i + 1}`}>
-                  {key && <img src={`${fileUrl(m.runId, key.file)}?v=${encodeURIComponent(v("keyframes"))}`} alt={`Ключовий кадр шоту ${i + 1}`} className="h-full w-full object-cover" />}
+                  {key && <img src={`${fileUrl(m.runId, key.file)}?v=${encodeURIComponent(v("keyframes"))}`} alt={`Keyframe of shot ${i + 1}`} className="h-full w-full object-cover" />}
                 </Thumb>
                 <Thumb label={`video ${i + 1}`}>
                   {vid && (
@@ -307,7 +307,7 @@ function Shots({ detail }: { detail: RunDetail }) {
                       preload="metadata"
                       poster={key ? fileUrl(m.runId, key.file) : undefined}
                       className="h-full w-full bg-black object-cover"
-                      aria-label={`Відео шоту ${i + 1}`}
+                      aria-label={`Video of shot ${i + 1}`}
                     />
                   )}
                 </Thumb>
@@ -316,13 +316,13 @@ function Shots({ detail }: { detail: RunDetail }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">Shot {i + 1}</span>
                   <span className="font-mono text-xs text-muted">
-                    {plan ? `${plan.start.toFixed(1)}–${(plan.start + plan.seconds).toFixed(1)} с` : `~${shot.approxSeconds} с`}
-                    {vid && ` · ${vid.attempts} ${plural(vid.attempts, ["спроба", "спроби", "спроб"])}`}
+                    {plan ? `${plan.start.toFixed(1)}–${(plan.start + plan.seconds).toFixed(1)} s` : `~${shot.approxSeconds} s`}
+                    {vid && ` · ${vid.attempts} ${plural(vid.attempts, ["attempt", "attempts"])}`}
                   </span>
                 </div>
                 <div className="text-[13px] text-soft">{shot.visual}</div>
                 <div className="font-mono text-xs text-muted">{shot.camera}</div>
-                {lines.length === 0 && <div className="text-[13px] text-muted">Репліки: немає (ambient + SFX)</div>}
+                {lines.length === 0 && <div className="text-[13px] text-muted">Lines: none (ambient + SFX)</div>}
                 {lines.map(({ line, voice, cue }, k) => {
                   if (!line) return null;
                   const who = script.characters.find((c) => c.id === line.characterId)?.name ?? line.characterId;
@@ -337,13 +337,13 @@ function Shots({ detail }: { detail: RunDetail }) {
                             <span className="font-mono text-xs text-muted">
                               {" "}
                               · {voice.file} · {secs(voice.seconds)}
-                              {cue && ` · cue ${cue.at.toFixed(1)} с`}
+                              {cue && ` · cue ${cue.at.toFixed(1)} s`}
                             </span>
                           )}
                         </span>
                       </div>
-                      {voice && <audio src={fileUrl(m.runId, voice.file)} controls preload="none" className="h-8 w-full max-w-[360px]" aria-label={`Озвучка репліки ${line.id}`} />}
-                      {asrDiffers && <div className="text-warn">ASR почув: «{voice?.asrText}»</div>}
+                      {voice && <audio src={fileUrl(m.runId, voice.file)} controls preload="none" className="h-8 w-full max-w-[360px]" aria-label={`Voice of line ${line.id}`} />}
+                      {asrDiffers && <div className="text-warn">ASR heard: "{voice?.asrText}"</div>}
                     </div>
                   );
                 })}
@@ -376,8 +376,8 @@ function EventLog({ events }: { events: RunEvent[] }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [events.length]);
   return (
-    <section aria-label="Журнал подій" className="rounded-[14px] border border-line bg-panel px-5 py-4.5">
-      <h2 className="mb-2.5 text-base font-semibold">Журнал подій</h2>
+    <section aria-label="Event log" className="rounded-[14px] border border-line bg-panel px-5 py-4.5">
+      <h2 className="mb-2.5 text-base font-semibold">Event log</h2>
       <pre ref={ref} className="m-0 max-h-80 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-[1.7] text-soft" tabIndex={0}>
         {events.length === 0
           ? "—"
@@ -410,13 +410,13 @@ function FinalVideo({ detail }: { detail: RunDetail }) {
           preload="metadata"
           onLoadedMetadata={(e) => setDims(`${e.currentTarget.videoWidth}×${e.currentTarget.videoHeight}`)}
           className="aspect-[9/16] w-full max-w-[270px] rounded-xl bg-black object-contain"
-          aria-label="Фінальне відео 9:16"
+          aria-label="Final video 9:16"
         />
       ) : (
         <div className="flex aspect-[9/16] w-full max-w-[270px] flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-line-dash bg-placeholder text-[13px] text-dim">
           <Icon.Film className="text-soft" />
           [final.mp4 · 9:16]
-          <span className="text-xs">{m.status === "running" ? "ще генерується" : "немає фінального відео"}</span>
+          <span className="text-xs">{m.status === "running" ? "still generating" : "no final video"}</span>
         </div>
       )}
       <div className="font-mono text-xs text-muted">
@@ -429,9 +429,9 @@ function FinalVideo({ detail }: { detail: RunDetail }) {
 function Verbatim({ detail }: { detail: RunDetail }) {
   const qa = detail.outputs.qa;
   return (
-    <Card title="Перевірка дослівності" className="flex flex-col gap-3">
+    <Card title="Verbatim check" className="flex flex-col gap-3">
       {!qa ? (
-        <p className="text-sm text-muted">З’явиться після етапу QA: ASR фінального відео порівнюється з текстом сценарію.</p>
+        <p className="text-sm text-muted">Appears after the QA stage: ASR of the final video is compared with the script text.</p>
       ) : (
         <VerbatimBody expected={qa.expectedText} heard={qa.heardText} />
       )}
@@ -445,32 +445,32 @@ function VerbatimBody({ expected, heard }: { expected: string; heard: string | n
   const chip = (ok: boolean) => (ok ? "bg-ok-bg text-ok" : "bg-fail-bg text-fail underline decoration-wavy");
   return (
     <>
-      <div className="text-xs text-muted">Очікувано (зі сценарію)</div>
+      <div className="text-xs text-muted">Expected (from the script)</div>
       <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-panel px-3 py-2.5 text-sm">
         {d
           ? d.expected.map((t, i) => (
-              <span key={i} className={t.ok ? "" : "rounded bg-fail-bg px-1 text-fail line-through"} title={t.ok ? undefined : "не почуто"}>
+              <span key={i} className={t.ok ? "" : "rounded bg-fail-bg px-1 text-fail line-through"} title={t.ok ? undefined : "not heard"}>
                 {t.word}
               </span>
             ))
           : expected}
       </div>
-      <div className="text-xs text-muted">Почуто (ASR з final.mp4)</div>
+      <div className="text-xs text-muted">Heard (ASR of final.mp4)</div>
       {d ? (
         <div className={`flex flex-wrap gap-1 rounded-lg border bg-panel px-3 py-2.5 text-sm ${allOk ? "border-ok-bd" : "border-fail-bd"}`}>
-          {d.heard.length === 0 && <span className="text-muted">(тиша)</span>}
+          {d.heard.length === 0 && <span className="text-muted">(silence)</span>}
           {d.heard.map((t, i) => (
-            <span key={i} className={`rounded px-1 py-px ${chip(t.ok)}`} title={t.ok ? undefined : "зайве / інше слово"}>
+            <span key={i} className={`rounded px-1 py-px ${chip(t.ok)}`} title={t.ok ? undefined : "extra / different word"}>
               {normalizeWord(t.word)}
             </span>
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-line bg-panel px-3 py-2.5 text-sm text-muted">ASR недоступний для цього пресету.</div>
+        <div className="rounded-lg border border-line bg-panel px-3 py-2.5 text-sm text-muted">ASR is not available for this preset.</div>
       )}
       <div className="text-[13px] text-muted">
-        Порівняння після нормалізації (регістр, пунктуація). Будь-яке відхилення провалює QA.
-        {d && !allOk && <span className="text-fail"> Червоним — розбіжності.</span>}
+        Compared after normalisation (case, punctuation). Any mismatch fails QA.
+        {d && !allOk && <span className="text-fail"> Mismatches are in red.</span>}
       </div>
     </>
   );
@@ -482,23 +482,23 @@ function QaChecks({ detail }: { detail: RunDetail }) {
     <Card
       title={
         <span className="flex items-center justify-between gap-2">
-          QA-перевірки
+          QA checks
           {qa && <Badge tone={qa.pass ? "done" : "qa"}>{qa.pass ? "pass" : "fail"}</Badge>}
         </span>
       }
       className="flex flex-col"
     >
-      {!qa && <p className="text-sm text-muted">Ще не виконано.</p>}
+      {!qa && <p className="text-sm text-muted">Not run yet.</p>}
       <ul className="m-0 flex list-none flex-col p-0">
         {qa?.checks.map((c) => (
           <li key={c.name} className="flex justify-between gap-3 border-t border-line-soft py-1.5 text-sm">
             <span className="text-soft">
-              <span className="sr-only">{c.pass ? "Пройдено: " : "Не пройдено: "}</span>
+              <span className="sr-only">{c.pass ? "Passed: " : "Failed: "}</span>
               {c.name}
             </span>
-            <span className={`text-right font-mono text-[13px] ${c.pass ? "text-ok" : "text-fail"}`} title={`очікувано: ${c.expected}`}>
+            <span className={`text-right font-mono text-[13px] ${c.pass ? "text-ok" : "text-fail"}`} title={`expected: ${c.expected}`}>
               {c.value}
-              {!c.pass && <span className="block text-xs text-muted">очікувано {c.expected}</span>}
+              {!c.pass && <span className="block text-xs text-muted">expected {c.expected}</span>}
             </span>
           </li>
         ))}
