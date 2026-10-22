@@ -31,6 +31,11 @@ export function Layout() {
                 fake runner
               </span>
             )}
+            {meta.data?.runner === "temporal" && (
+              <span className="rounded border border-line-strong px-1.5 py-0.5" title="REEL_RUNNER=temporal: stages run as a Temporal workflow">
+                temporal
+              </span>
+            )}
             pipeline v{meta.data?.pipelineVersion ?? "…"}
           </div>
         </div>

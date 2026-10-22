@@ -1,10 +1,10 @@
 /**
  * Background execution of runs.
  *
- * PoC: runs execute as in-process promises. If the API process dies, the run folder stays
- * consistent (RunStore writes atomically) and can be continued with "resume". The next step for
- * production is a real queue + worker (e.g. BullMQ/SQS + a separate worker process), with the API
- * only enqueueing jobs and serving the run folders.
+ * With REEL_RUNNER=core runs execute as in-process promises. If the API process dies, the run
+ * folder stays consistent (RunStore writes atomically) and can be continued with "resume".
+ * With REEL_RUNNER=temporal the API only starts a workflow and waits for it; the stages run on a
+ * Temporal worker, which survives API restarts when TEMPORAL_ADDRESS points at a real server.
  */
 import { readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -13,7 +13,12 @@ import { resumeRun, startRun, type Manifest, type RunInput, type StageName } fro
 import { RUNNER, RUNS_ROOT } from "./env.ts";
 import { fakeResumeRun, fakeStartRun, type RunnerOptions } from "./fake/simulate.ts";
 
-const runner = RUNNER === "fake" ? { start: fakeStartRun, resume: fakeResumeRun } : { start: startRun, resume: resumeRun };
+const runner =
+  RUNNER === "fake"
+    ? { start: fakeStartRun, resume: fakeResumeRun }
+    : RUNNER === "temporal"
+      ? await import("@reel/temporal").then((t) => ({ start: t.startRun, resume: t.resumeRun }))
+      : { start: startRun, resume: resumeRun };
 
 /** runIds currently executing in this process */
 const active = new Map<string, Promise<unknown>>();

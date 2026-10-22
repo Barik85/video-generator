@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { ffmpeg } from "../util/exec.ts";
 import { probe } from "../media.ts";
@@ -230,7 +231,23 @@ export class OpenRouterVideo implements VideoProvider {
     return `openrouter:${this.model}`;
   }
 
-  async generate({ prompt, imageFile, audioFile, seconds, outFile, seed }: Parameters<VideoProvider["generate"]>[0]) {
+  async generate(req: Parameters<VideoProvider["generate"]>[0]) {
+    const { outFile, seconds, seed } = req;
+    // The job id is kept next to the output until the clip is downloaded. If this process dies
+    // mid-generation (or a Temporal activity is retried), the next call waits for the same job
+    // instead of submitting, and paying for, a new one.
+    const jobFile = `${outFile}.job.json`;
+    const pending = existsSync(jobFile) ? (JSON.parse(await readFile(jobFile, "utf8")) as { id: string; model: string }) : null;
+    const id = pending?.model === this.model ? pending.id : await this.submit(req);
+    if (id !== pending?.id) await writeFile(jobFile, JSON.stringify({ id, model: this.model, submittedAt: new Date().toISOString() }));
+    const job = await this.wait(id, jobFile);
+    const content = await api(`/videos/${id}/content?index=0`, { method: "GET" });
+    await writeFile(outFile, Buffer.from(await content.arrayBuffer()));
+    await rm(jobFile, { force: true });
+    return { usd: job.usage?.cost ?? seconds * this.usdPerSecond, seed: seed ?? null };
+  }
+
+  private async submit({ prompt, imageFile, audioFile, seconds, seed }: Parameters<VideoProvider["generate"]>[0]): Promise<string> {
     const image = await dataUrl(await asJpeg(imageFile), "image/jpeg");
     // With a dialogue track: reference mode (@Image1 + @Audio1, Seedance 2). Without: the keyframe is the literal first frame.
     const inputs = audioFile
@@ -256,18 +273,14 @@ export class OpenRouterVideo implements VideoProvider {
         ...inputs,
       }),
     );
-    const { id } = (await submit.json()) as { id: string };
-    const job = await this.wait(id);
-    const content = await api(`/videos/${id}/content?index=0`, { method: "GET" });
-    await writeFile(outFile, Buffer.from(await content.arrayBuffer()));
-    return { usd: job.usage?.cost ?? seconds * this.usdPerSecond, seed: seed ?? null };
+    return ((await submit.json()) as { id: string }).id;
   }
 
   /**
-   * Polls the job. Network blips while polling are tolerated here rather than thrown: a throw would
-   * make the caller resubmit, and a resubmitted job is billed again.
+   * Polls the job. Network blips while polling are tolerated here rather than thrown. On any throw
+   * except a terminal job status the job file stays, so the next attempt keeps waiting for this job.
    */
-  private async wait(id: string) {
+  private async wait(id: string, jobFile: string) {
     const started = Date.now();
     let blips = 0;
     while (true) {
@@ -282,6 +295,7 @@ export class OpenRouterVideo implements VideoProvider {
       }
       if (job.status === "completed") return job;
       if (["failed", "cancelled", "expired"].includes(job.status)) {
+        await rm(jobFile, { force: true }); // finished for good: a retry must submit a new job
         const msg = `${this.model} job ${id} ${job.status}: ${job.error ?? "no details"}`;
         // A moderation refusal will refuse again; anything else is worth another attempt.
         if (/moderat|policy|safety|sensitive|violat/i.test(job.error ?? "")) throw new PermanentError(msg);

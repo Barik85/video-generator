@@ -14,6 +14,8 @@ const USAGE = `reel — idea → vertical video
   reel show <runId>
 
 Options: --runs <dir> (default ./runs), --json (print final manifest as JSON)
+         --runner local|temporal (default $REEL_RUNNER or local). temporal: with TEMPORAL_ADDRESS
+           set, uses that server and its worker; without, starts a dev server + worker in-process
 Presets: ${Object.keys(PRESETS).join(", ")}`;
 
 const { values, positionals } = parseArgs({
@@ -26,6 +28,7 @@ const { values, positionals } = parseArgs({
     budget: { type: "string", default: "8" },
     from: { type: "string" },
     runs: { type: "string", default: "runs" },
+    runner: { type: "string", default: process.env.REEL_RUNNER === "temporal" ? "temporal" : "local" },
     json: { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
@@ -50,8 +53,16 @@ function finish(m: Manifest) {
   }
   const failed = Object.entries(m.stages).find(([, s]) => s.status === "failed");
   console.error(`\n✗ run ${m.runId} failed${failed ? ` at ${failed[0]}: ${failed[1].error}` : ""}`);
-  console.error(`  inspect: ${dir}\n  retry:   npm run reel -- resume ${m.runId}${failed ? ` --from ${failed[0]}` : ""}`);
+  console.error(`  inspect: ${dir}\n  retry:   npm run reel -- resume ${m.runId}${failed ? ` --from ${failed[0]}` : ""}${values.runner === "temporal" ? " --runner temporal" : ""}`);
   process.exit(1);
+}
+
+/** The in-process runner from @reel/core, or the Temporal one with the same contract (loaded only when asked for). */
+async function loadRunner() {
+  if (values.runner === "local") return { startRun, resumeRun, close: async () => {} };
+  if (values.runner !== "temporal") throw new Error(`unknown runner ${values.runner}; use local or temporal`);
+  const t = await import("@reel/temporal");
+  return { startRun: t.startRun, resumeRun: t.resumeRun, close: t.closeTemporal };
 }
 
 async function main() {
@@ -61,13 +72,17 @@ async function main() {
     const idea = values.idea ?? (values["idea-file"] ? readFileSync(values["idea-file"], "utf8").trim() : undefined);
     if (!idea) throw new Error("--idea or --idea-file is required");
     const input = RunInput.parse({ idea, targetSeconds: Number(values.seconds), preset: values.preset, budgetUsd: Number(values.budget) });
-    return finish(await startRun({ runsRoot, input, onEvent: printEvent }));
+    const runner = await loadRunner();
+    const m = await runner.startRun({ runsRoot, input, onEvent: printEvent }).finally(runner.close);
+    return finish(m);
   }
   if (cmd === "resume") {
     if (!arg) throw new Error("resume needs a runId");
     const from = values.from as StageName | undefined;
     if (from && !STAGES.includes(from)) throw new Error(`unknown stage ${from}`);
-    return finish(await resumeRun({ runsRoot, runId: arg, from, onEvent: printEvent }));
+    const runner = await loadRunner();
+    const m = await runner.resumeRun({ runsRoot, runId: arg, from, onEvent: printEvent }).finally(runner.close);
+    return finish(m);
   }
   if (cmd === "ls") {
     for (const m of await RunStore.list(runsRoot)) {

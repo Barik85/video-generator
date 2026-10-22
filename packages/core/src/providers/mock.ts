@@ -7,7 +7,8 @@ import type { AsrProvider, ImageProvider, LlmProvider, ScriptRequest, TtsProvide
 /**
  * Offline providers. They exercise the real orchestration, state, media assembly and QA code
  * paths; only the "intelligence" is faked. Set REEL_MOCK_FAIL=video:1 to inject a transient
- * failure on the first video call (to demo retries).
+ * failure on the first video call (to demo retries), and REEL_MOCK_VIDEO_MS=20000 to make each clip
+ * take that long, like a real provider (to demo killing a worker mid-stage).
  */
 const failPlan = new Map(
   (process.env.REEL_MOCK_FAIL ?? "")
@@ -79,6 +80,7 @@ export class MockVideo implements VideoProvider {
   usdPerSecond = 0;
   async generate({ prompt, imageFile, audioFile, seconds, outFile }: Parameters<VideoProvider["generate"]>[0]) {
     maybeFail("video");
+    await new Promise((r) => setTimeout(r, Number(process.env.REEL_MOCK_VIDEO_MS ?? 0)));
     if (audioFile) {
       await mockVideoFromImage(imageFile, seconds, outFile);
       return { usd: 0, seed: null };

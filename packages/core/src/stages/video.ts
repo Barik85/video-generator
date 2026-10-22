@@ -12,8 +12,8 @@ const MAX_TAKES = Number(process.env.REEL_VIDEO_TAKES ?? 3);
 const LANGUAGES: Record<string, string> = { uk: "Ukrainian", en: "English", pl: "Polish", es: "Spanish", de: "German", fr: "French" };
 
 /**
- * Keyframe (+ dialogue track in lip-sync mode) → clip. Each shot is checkpointed on disk, so a
- * failure on shot 2 never re-bills shot 1, and `resume` picks up exactly where it stopped.
+ * Keyframe (+ dialogue track in lip-sync mode) → clip. Each shot and each take is checkpointed on
+ * disk, so a failure on shot 2 never re-bills shot 1, and `resume` picks up exactly where it stopped.
  *
  * In native-audio mode the model speaks the line itself, so every take is transcribed and compared
  * with the script; a paraphrase triggers a new take. Every take is a separate budget-checked call.
@@ -30,6 +30,7 @@ export async function videoStage(ctx: StageContext, script: Script, plan: PlanOu
     const audioRel = native ? `video/${shot.id}.wav` : undefined;
     if (existsSync(ctx.store.path(rel)) && (!audioRel || existsSync(ctx.store.path(audioRel)))) {
       out.shots.push({ shotId: shot.id, file: rel, attempts: 0, seed: null, audio: audioRel });
+      await ctx.log("info", `video ${shot.id}: already on disk from an earlier attempt, reused`);
       continue;
     }
     const keyframe = ctx.store.path(keyframes.shots.find((k) => k.shotId === shot.id)!.file);
@@ -42,7 +43,10 @@ export async function videoStage(ctx: StageContext, script: Script, plan: PlanOu
     for (let take = 1; take <= (native && hasDialogue ? MAX_TAKES : 1); take++) {
       takes = take;
       const raw = ctx.store.path(`video/${shot.id}.take${take}.raw.mp4`);
-      const res = await ctx.paid(`video ${shot.id} take ${take} (${p.seconds}s, ${video.name})`, p.seconds * video.usdPerSecond, async (attempt) => {
+      // A take that finished before a crash or a stage retry is already paid for: use it as is.
+      const reused = existsSync(raw) && (await checkClip(raw, p.seconds, native).then(() => true, () => false));
+      if (reused) await ctx.log("info", `${shot.id} take ${take}: reusing the clip from an earlier attempt`);
+      const res = reused ? { usd: 0, seed: null } : await ctx.paid(`video ${shot.id} take ${take} (${p.seconds}s, ${video.name})`, p.seconds * video.usdPerSecond, async (attempt) => {
         const r = await video.generate({
           prompt,
           imageFile: keyframe,
@@ -51,10 +55,7 @@ export async function videoStage(ctx: StageContext, script: Script, plan: PlanOu
           outFile: raw,
           seed: ctx.seed(`video:${shot.id}:${take}:${attempt}`),
         });
-        // A clip that is missing, empty or far too short is a failed generation: throw so it is retried.
-        const info = await probe(raw);
-        if (!info.hasVideo || info.seconds < p.seconds - 1) throw new Error(`bad clip: video=${info.hasVideo} ${info.seconds.toFixed(1)}s (wanted ${p.seconds}s)`);
-        if (native && !info.hasAudio) throw new Error("clip has no audio track although native audio was requested");
+        await checkClip(raw, p.seconds, native);
         return r;
       });
       if (!native || !hasDialogue) {
@@ -89,6 +90,13 @@ export async function videoStage(ctx: StageContext, script: Script, plan: PlanOu
     await ctx.log("info", `video ${shot.id} ready (${p.seconds}s, takes ${takes})`);
   }
   return out;
+}
+
+/** A clip that is missing, empty or far too short is a failed generation: throw so it is retried. */
+async function checkClip(file: string, seconds: number, native: boolean) {
+  const info = await probe(file);
+  if (!info.hasVideo || info.seconds < seconds - 1) throw new Error(`bad clip: video=${info.hasVideo} ${info.seconds.toFixed(1)}s (wanted ${seconds}s)`);
+  if (native && !info.hasAudio) throw new Error("clip has no audio track although native audio was requested");
 }
 
 export function videoPrompt(script: Script, shot: Shot, hasDialogue: boolean): string {

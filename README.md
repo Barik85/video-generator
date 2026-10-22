@@ -27,7 +27,7 @@ The `mock` and `mock-native` presets (the default is `mock`) need no keys. They 
 ## Commands
 
 ```bash
-npm run reel -- run --idea "..." [--seconds 15] [--preset mock|mock-native|or-seedance-native|or-veo-native|or-seedance-lipsync|...] [--budget 8]
+npm run reel -- run --idea "..." [--seconds 15] [--preset mock|mock-native|or-seedance-native|or-veo-native|or-seedance-lipsync|...] [--budget 8] [--runner local|temporal]
 npm run reel -- resume <runId> [--from video]   # continue after a failure, or redo from a stage
 npm run reel -- ls
 npm run reel -- show <runId>
@@ -55,7 +55,40 @@ idea ─► script ─► voice ─► plan ─► keyframes ─► video ─►
 
 **Errors.** Transient provider failures (network, 429, 5xx, bad clip) are retried 3 times with exponential backoff. Permanent ones (validation, auth, policy, budget) stop the run at once with a clear message and a `resume` command. Content failures (paraphrased script, misheard TTS) are retried with feedback or different settings. Every paid call first checks the run's `--budget`.
 
+**Nothing finished is paid for twice.** Every shot and every video take is saved as soon as it is ready and reused on a retry or `resume`. A submitted OpenRouter video job writes its id next to the output file (`<take>.raw.mp4.job.json`). If the process dies while the job is generating, the next attempt keeps waiting for that same job instead of submitting a new one.
+
+## Runners: in-process or Temporal
+
+The stages are the same either way; only the orchestration differs. Both runners call the same core steps (`beginRun`, `executeStage`, `finishRun` in `packages/core/src/runner.ts`) and keep all state in the run folder.
+
+| | `--runner local` (default) | `--runner temporal` |
+|---|---|---|
+| Where stages run | inside the CLI or API process | as activities of the `reelRun` workflow on a Temporal worker (`packages/temporal`) |
+| Process dies mid-run | the run stops; continue it with `resume` | another worker picks the stage up after the 2-minute heartbeat timeout and retries it; finished shots, takes and pending video jobs are reused |
+| Whole-stage retries | none (provider calls retry inside the stage) | up to 3 per stage, 30 s → 60 s backoff; permanent errors are not retried |
+| Run history | `events.jsonl` | `events.jsonl` plus the Temporal UI |
+| Needs | nothing | nothing extra for one command (see below), or a Temporal server and a worker |
+
+```bash
+# One command: starts a throwaway Temporal dev server and a worker inside the CLI process
+# (the dev server binary is downloaded by the SDK on first use)
+npm run reel -- run --runner temporal --idea "..." --preset mock-native
+
+# Separate server and worker, as in production
+npm run temporal:server     # localhost:7233, UI on http://localhost:8233, history in .temporal/dev.db
+npm run temporal:worker     # any number of these; each needs the same disk as the client (runs/)
+TEMPORAL_ADDRESS=localhost:7233 npm run reel -- run --runner temporal --idea "..."
+TEMPORAL_ADDRESS=localhost:7233 npm run reel -- resume <runId> --from video --runner temporal
+
+# Web UI on Temporal
+TEMPORAL_ADDRESS=localhost:7233 npm run dev:ui:temporal
+```
+
+`REEL_RUNNER=temporal` makes Temporal the default for both the CLI and the API. The workflow id is the run id, so Temporal refuses to execute the same run twice at once.
+
+To see a worker crash handled: start the server, a worker with `REEL_MOCK_VIDEO_MS=15000` (each mock clip then takes 15 s), and a `mock-native` run. Kill the worker once the first shot is ready, and start another worker. About 2 minutes later the log shows `video: Temporal retry, attempt 2`, then `video s1: already on disk from an earlier attempt, reused`, and the run finishes.
+
 ## Decisions and examples
 
-- `docs/adr/` explains why the pipeline is shaped this way: [0001](docs/adr/0001-openrouter-as-single-gateway.md) covers OpenRouter as the single gateway, and [0002](docs/adr/0002-dialogue-audio-native-first.md) covers native audio with an ASR check, with TTS lip-sync as the fallback.
+- `docs/adr/` explains why the pipeline is shaped this way: [0001](docs/adr/0001-openrouter-as-single-gateway.md) covers OpenRouter as the single gateway, [0002](docs/adr/0002-dialogue-audio-native-first.md) covers native audio with an ASR check, with TTS lip-sync as the fallback, and [0003](docs/adr/0003-temporal-as-second-runner.md) covers Temporal as a second runner next to the in-process one.
 - `examples/` holds the generated videos, named by model, with cost and WER for each.

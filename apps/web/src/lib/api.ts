@@ -27,7 +27,7 @@ export const STAGE_LABEL: Record<StageName, string> = {
 
 export interface Meta {
   pipelineVersion: string;
-  runner: "core" | "fake";
+  runner: "core" | "temporal" | "fake";
   runsRoot: string;
   presets: string[];
   stages: StageName[];

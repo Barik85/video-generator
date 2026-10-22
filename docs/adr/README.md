@@ -6,6 +6,7 @@ Short records of decisions that are not obvious from the code: what was decided,
 |---|---|---|---|
 | [0001](0001-openrouter-as-single-gateway.md) | All model calls go through OpenRouter | Accepted | 2026-10-21 |
 | [0002](0002-dialogue-audio-native-first.md) | Dialogue audio: the video model speaks the line, an ASR check gates it, TTS lip-sync is the fallback | Accepted (fallback not implemented yet) | 2026-10-21 |
+| [0003](0003-temporal-as-second-runner.md) | Temporal as a second runner; the in-process runner stays the default | Accepted | 2026-10-22 |
 
 Raw data for these records: `docs/research/facts.md` (prices and limits from public sources) and `examples/README.md` (the runs behind the example videos). Each run's full state is in `runs/<runId>/` (gitignored, local only).
 

@@ -7,6 +7,7 @@
     "reel": "./src/main.ts"
   },
   "dependencies": {
+    "@reel/temporal": "*",
     "dotenv": "^18.0.8"
   }
 }
