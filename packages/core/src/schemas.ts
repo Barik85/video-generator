@@ -2,6 +2,19 @@ import { z } from "zod";
 
 // ---------- Input ----------
 
+/** Points where a run can pause for a person: right after the named stage, before money goes to the next one. */
+export const REVIEW_GATES = ["script", "keyframes"] as const;
+export const ReviewGate = z.enum(REVIEW_GATES);
+export type ReviewGate = z.infer<typeof ReviewGate>;
+
+export const ReviewDecision = z.object({
+  gate: ReviewGate,
+  /** approve: continue. redo: run the stage again with `note` as instructions, then ask again. reject: stop the run. */
+  action: z.enum(["approve", "redo", "reject"]),
+  note: z.string().max(2000).optional(),
+});
+export type ReviewDecision = z.infer<typeof ReviewDecision>;
+
 export const RunInput = z.object({
   idea: z.string().min(1),
   /** Target length of the final video, seconds (8–30). */
@@ -9,6 +22,8 @@ export const RunInput = z.object({
   preset: z.string().default("mock"),
   /** Hard spend cap for the run, USD. */
   budgetUsd: z.number().positive().default(8),
+  /** Review gates to pause at (human-in-the-loop). Empty: fully autonomous. */
+  review: z.array(ReviewGate).default([]),
 });
 export type RunInput = z.infer<typeof RunInput>;
 
@@ -142,6 +157,10 @@ export const Manifest = z.object({
   stages: z.record(z.string(), StageRecord),
   cost: z.object({ totalUsd: z.number(), items: z.array(CostItem) }),
   final: z.string().nullable().default(null),
+  /** Set while the run is paused at a review gate. */
+  awaitingReview: z.object({ gate: ReviewGate, since: z.string() }).nullable().default(null),
+  /** Every review decision, oldest first. Redo notes are read back by the stage they apply to. */
+  reviews: z.array(ReviewDecision.extend({ at: z.string() })).default([]),
 });
 export type Manifest = z.infer<typeof Manifest>;
 

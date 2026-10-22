@@ -9,7 +9,7 @@ The PoC was built on its own in-process runner (`packages/core/src/runner.ts`): 
 
 - **If the process dies, the run stops.** Someone has to notice and run `resume`.
 - **Re-submitting a video job costs money.** One clip takes 1.5–4 min. To avoid paying twice, a poll timeout was made a permanent error. A crash during generation lost the job, and the retry paid for a new one.
-- **Nothing can pause a run** for a human decision, so the human-in-the-loop checkboxes in the UI are marked "soon".
+- **Nothing can pause a run** for a human decision, so the human-in-the-loop checkboxes in the UI were marked "soon".
 - **No history view** beyond `events.jsonl`.
 
 This record covers the implementation. Choosing an orchestration framework for the production stack is part of the test-task note and is argued there, not here.
@@ -32,9 +32,18 @@ Two changes in the core benefit both runners:
 | `prepareRun` (validate preset, reopen for resume) | 1 min | 5 |
 | `runStage` (one stage; heartbeats every 10 s) | start-to-close 6 h, heartbeat 2 min | 3, 30 s → 60 s; `PermanentError` is non-retryable |
 | `finishRun` (final status from QA) | 1 min | 5 |
+| `requestReview` / `applyReview` (review gates, see below) | 1 min | 5 |
 
 - **Workflow id is the run id**, so Temporal refuses a second concurrent execution of the same run, and `resume` reuses the id.
 - **Workflow arguments carry `runsRoot`**, so a worker does not need its own copy of that setting.
+
+## Review gates (human-in-the-loop)
+
+Added the same day, on top of the runner split. A run can pause after `script` and/or `keyframes` (`input.review`):
+- The core owns the logic (`packages/core/src/review.ts`). `requestReview` sets `manifest.awaitingReview`. `applyReview` records the decision in `manifest.reviews` and, on a redo, sends the stage back to pending and deletes its media. The stage reads the notes back: the script gets the previous script plus the notes, and the keyframes get the notes in the prompt plus a new seed.
+- **Temporal:** the workflow waits on the `review` signal with `condition(…, "7 days")`. Only a decision for the gate it is waiting at counts. No answer in 7 days counts as a reject.
+- **In-process:** the runner awaits `onReview`. The CLI asks on the terminal; the API holds a promise per run, resolved by `POST /api/runs/:id/review`. A process restart loses the wait; `resume` asks again.
+- A resumed run asks again unless the latest decision for that gate is an approve made after the stage last finished.
 
 ## Verified (2026-10-22, `mock-native` preset)
 
@@ -46,7 +55,12 @@ Two changes in the core benefit both runners:
 | Worker killed (`kill -9`) after shot 1 of 2, during shot 2 | 2 min 23 s later a second worker logged `video: Temporal retry, attempt 2`; shot 1 was reused from disk; only shot 2 was generated; run done |
 | `resume --from video` on an existing workflow id | ran; both shots reused; final reassembled |
 | API with `REEL_RUNNER=temporal` against an external server | run created from `POST /api/runs`, status `done` |
-| Unit tests | the workflow's stage order equals the core's `STAGES`; a saved OpenRouter job is awaited, not resubmitted; a failed job is forgotten |
+| Review: redo (with note) → approve on the script, reject on the keyframes | same events and final manifest on both runners, called directly and through the API; the redone script stage logs "rewriting the script with 1 reviewer note(s)"; the run ends `failed` with the reject recorded |
+| Review through an external server | a non-interactive CLI run waited; `reel review <id> redo --note …` then `approve` from another process; run done |
+| API validation | a redo without a note → 400; a decision for a gate the run is not waiting at → 409 |
+| Unit tests | the workflow's stage order equals the core's `STAGES`; a saved OpenRouter job is awaited, not resubmitted; a failed job is forgotten; review state, re-asking on resume, notes in the LLM prompt |
+
+The mock LLM ignores reviewer notes, so with mock presets a redo produces the same script. Only the orchestration was tested, not whether a real model follows the notes.
 
 Not tested with paid providers: the job resume was checked against a stubbed OpenRouter API only.
 
@@ -60,12 +74,12 @@ Not tested with paid providers: the job resume was checked against a stubbed Ope
 
 ## Not done yet
 
-- Human-in-the-loop via signals: approve the script and the keyframes before paying for video. The workflow would wait on a signal between stages, and the UI checkboxes would send it.
 - Shots in parallel, as separate activities. Today one `runStage("video")` generates them one after another.
 - Job resume for the fal.ai provider. Only OpenRouter saves its job id.
 
 ## Revisit when
 
-- human approval or parallel shots are needed: both fit the workflow and not the in-process loop;
+- parallel shots are needed: they fit the workflow better than the in-process loop;
+- review waits must survive restarts in production: then the in-process runner is not enough for runs with gates;
 - runs move off a single machine: then a shared store becomes mandatory;
 - "one command" stops being a requirement: then Temporal could become the default.

@@ -14,7 +14,10 @@ npm run dev:ui:fake         # same, but new runs use the in-process simulator
 
 Open http://localhost:5173.
 
-Env: `RUNS_DIR` (default `<repo>/runs`), `PORT` (api, default 8787), `REEL_RUNNER=fake|core`,
+Provider keys come from the repo-root `.env` (loaded by `apps/api/src/load-env.ts`). Presets whose
+keys are missing are disabled in the form, and `POST /api/runs` rejects them with 400.
+
+Env: `RUNS_DIR` (default `<repo>/runs`), `PORT` (api, default 8787), `REEL_RUNNER=core|temporal|fake`,
 `API_URL` (proxy target for Vite).
 
 Checks: `npm run typecheck:ui`, `npm run build:ui`.
@@ -22,7 +25,7 @@ Checks: `npm run typecheck:ui`, `npm run build:ui`.
 ## Screens
 
 - **New run** (`/`) — idea, duration 8/15/20/30 s, preset (list comes from `PRESETS` via
-  `GET /api/meta`), budget; live cost estimate (price table in `src/lib/pricing.ts`, the only place
+  `GET /api/meta`, which also reports missing keys; default `mock-native`), budget, review checkpoints; live cost estimate (price table in `src/lib/pricing.ts`, the only place
   prices live); the equivalent CLI command. Submitting creates the run and opens its page.
 - **Run detail** (`/runs/:id`) — stage timeline driven by SSE (`/api/runs/:id/events`), cost vs
   budget, shots (keyframe + per-shot video, dialogue lines with audio), event log, final 9:16
@@ -37,8 +40,12 @@ Checks: `npm run typecheck:ui`, `npm run build:ui`.
   "running". `REEL_RUNNER=fake` uses the same simulator for runs started from the UI; the
   header shows a “fake runner” badge then.
 - Seedance 2.5 price is an estimate (Seedance 2.0 Standard rate) — no public price yet.
-- Human-in-the-loop checkboxes are rendered disabled ("soon"): the core has no approval gates.
-- Runs execute as in-process promises inside the API. If the API restarts, a run stays “running”
-  on disk (the list shows "Interrupted?" after 10 min without updates) and can be continued with
-  “resume”. Next step: a real queue + worker process; the API would only enqueue and serve files.
+- Human-in-the-loop: the New run form can pause the run after the script and/or the keyframes.
+  The run page then shows a review card (approve, redo with a note, reject), and the run list shows
+  "Needs review". Not available with `REEL_RUNNER=fake`.
+- With the default runner, runs execute as in-process promises inside the API. If the API restarts,
+  a run stays “running” on disk (the list shows "Interrupted?" after 10 min without updates) and
+  can be continued with “resume”; a run paused for review is asked again. With
+  `REEL_RUNNER=temporal` the stages run on a Temporal worker and the API only starts workflows and
+  sends review signals.
 - No auth, no DB: the `runs/` folder is the database.

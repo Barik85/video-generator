@@ -1,6 +1,7 @@
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
-import { PermanentError, RunStore, beginRun, errMsg, executeStage, finishRun, prepareResume, providersFor, type StageName } from "@reel/core";
+import { PermanentError, RunStore, applyReview, beginRun, errMsg, executeStage, finishRun, prepareResume, providersFor, requestReview } from "@reel/core";
+import type { ReviewDecision, ReviewGate, StageName } from "@reel/core";
 
 /**
  * Activities are thin wrappers over the core runner steps. Every activity opens the run folder from
@@ -8,11 +9,23 @@ import { PermanentError, RunStore, beginRun, errMsg, executeStage, finishRun, pr
  * step does. Temporal only adds when and how often.
  */
 export const activities = {
-  /** Validates the preset and logs the start; with `resume`, reopens the run (from `from`, if given). */
-  async prepareRun(runsRoot: string, runId: string, resume: boolean, from: StageName | null): Promise<boolean> {
+  /**
+   * Validates the preset and logs the start; with `resume`, reopens the run (from `from`, if given).
+   * Returns the review gates to pause at, or null if the run cannot start.
+   */
+  async prepareRun(runsRoot: string, runId: string, resume: boolean, from: StageName | null): Promise<ReviewGate[] | null> {
     const store = await RunStore.open(runsRoot, runId);
     if (resume) await prepareResume(store, from ?? undefined);
-    return (await beginRun(store)) !== null;
+    return (await beginRun(store)) ? store.get().input.review : null;
+  },
+
+  /** Marks the run as waiting at `gate`. False if this output was already approved (e.g. on resume). */
+  async requestReview(runsRoot: string, runId: string, gate: ReviewGate): Promise<boolean> {
+    return requestReview(await RunStore.open(runsRoot, runId), gate);
+  },
+
+  async applyReview(runsRoot: string, runId: string, decision: ReviewDecision): Promise<void> {
+    await applyReview(await RunStore.open(runsRoot, runId), decision);
   },
 
   /**

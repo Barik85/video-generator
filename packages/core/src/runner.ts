@@ -1,6 +1,7 @@
 import { RunStore } from "./run-store.ts";
 import { providersFor, type Providers } from "./providers/index.ts";
-import { STAGES, type Manifest, type RunEvent, type RunInput, type StageName } from "./schemas.ts";
+import { STAGES, type Manifest, type ReviewDecision, type ReviewGate, type RunEvent, type RunInput, type StageName } from "./schemas.ts";
+import { applyReview, requestReview } from "./review.ts";
 import type { AssembleOutput, MediaOutput, PlanOutput, Script, VoiceOutput } from "./schemas.ts";
 import { makeContext, errMsg, type StageContext } from "./stages/context.ts";
 import { scriptStage } from "./stages/script.ts";
@@ -17,6 +18,12 @@ export interface RunOptions {
   onEvent?: (e: RunEvent) => void;
   /** Called once the run folder exists — lets a server return the id before the run finishes. */
   onCreated?: (runId: string) => void;
+  /**
+   * Called when the run pauses at a review gate (`input.review`); resolves with the person's
+   * decision. The in-process runner needs it for runs with gates; the Temporal runner uses it only
+   * to prompt locally, since a signal from anywhere (UI, `reel review`) also works there.
+   */
+  onReview?: (gate: ReviewGate, runId: string) => Promise<ReviewDecision>;
 }
 
 /** In-process runner: runs every stage in this process, one after another. */
@@ -36,17 +43,31 @@ export async function resumeRun(opts: RunOptions & { runId: string; from?: Stage
 
 async function execute(store: RunStore, opts: RunOptions): Promise<Manifest> {
   if (opts.onEvent) store.onEvent(opts.onEvent);
+  const gates = store.get().input.review;
+  if (gates.length && !opts.onReview) {
+    await store.event("run", "run.fail", `review gates (${gates.join(", ")}) need someone to answer them: run from an interactive CLI, the UI, or --runner temporal`);
+    await store.setStatus("failed");
+    return store.get();
+  }
   const providers = await beginRun(store);
   if (!providers) return store.get();
-  for (const stage of STAGES) {
+  for (let i = 0; i < STAGES.length; i++) {
+    const stage = STAGES[i]!;
     try {
       await executeStage(store, providers, stage);
     } catch {
       return finishRun(store, stage);
     }
+    if (!isGate(stage, gates) || !(await requestReview(store, stage))) continue;
+    const decision = await opts.onReview!(stage, store.runId);
+    await applyReview(store, { ...decision, gate: stage });
+    if (decision.action === "reject") return finishRun(store, stage);
+    if (decision.action === "redo") i--; // the same stage again, now with the reviewer's note
   }
   return finishRun(store, null);
 }
+
+const isGate = (stage: StageName, gates: readonly ReviewGate[]): stage is ReviewGate => (gates as readonly string[]).includes(stage);
 
 /*
  * The steps below are shared by every runner: the in-process loop above and the Temporal workflow

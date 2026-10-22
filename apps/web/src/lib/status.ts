@@ -35,6 +35,7 @@ export function runStatus(m: Manifest, active: boolean): RunStatusView {
       stale: false,
     };
   }
+  if (m.awaitingReview) return { tone: "wait", label: "Needs review", stage: `${STAGE_LABEL[m.awaitingReview.gate]}: waiting for a decision`, stale: false };
   const stale = !active && Date.now() - Date.parse(m.updatedAt) > STALE_MS;
   const current = runningStage ?? STAGES.find((s) => m.stages[s]?.status !== "done");
   return {

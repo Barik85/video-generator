@@ -11,6 +11,8 @@ export interface ScriptRequest {
   quotedLines: string[];
   /** Validation errors from the previous attempt, fed back to the model. */
   feedback?: string[];
+  /** A human sent the script back: the script they saw and their notes, oldest first. */
+  review?: { previous: Script | null; notes: string[] };
 }
 
 export interface LlmProvider {

@@ -27,12 +27,26 @@ The `mock` and `mock-native` presets (the default is `mock`) need no keys. They 
 ## Commands
 
 ```bash
-npm run reel -- run --idea "..." [--seconds 15] [--preset mock|mock-native|or-seedance-native|or-veo-native|or-seedance-lipsync|...] [--budget 8] [--runner local|temporal]
+npm run reel -- run --idea "..." [--seconds 15] [--preset mock|mock-native|or-seedance-native|or-veo-native|or-seedance-lipsync|...] [--budget 8] [--runner local|temporal] [--review script,keyframes]
+npm run reel -- review <runId> approve|redo|reject [--note "..."]   # answer a paused run (Temporal server)
 npm run reel -- resume <runId> [--from video]   # continue after a failure, or redo from a stage
 npm run reel -- ls
 npm run reel -- show <runId>
 npm test
 ```
+
+## Web UI
+
+```bash
+npm run dev:ui      # API on :8787 + web on http://localhost:5173 (stop with Ctrl+C)
+```
+
+1. **New run:** write the idea (put the line in quotes), pick the length, the preset and the budget. Presets whose keys are missing from `.env` are greyed out and say which key they need; the default `mock-native` is free. For a real video use `or-seedance-native`.
+2. **Human-in-the-loop checkpoints:** tick "script" and/or "keyframes" to pause the run there. The form also shows the equivalent CLI command.
+3. **Run page:** the stages update live. At a checkpoint a card asks for a decision: **Approve**, **Redo with note** (the note goes into the prompt) or **Reject and stop**. The run list shows such runs as "Needs review".
+4. When the run is done the page has the player, the verbatim check (script vs ASR), the QA checks and the cost against the budget. A failed run can be continued with "resume from stage".
+
+The API reads the same `.env` as the CLI. With the default runner the run lives inside the API process: if you restart `dev:ui` mid-run, open the run and press resume. More in [apps/web/README.md](apps/web/README.md); for the Temporal variant see below.
 
 ## Pipeline
 
@@ -56,6 +70,21 @@ idea ─► script ─► voice ─► plan ─► keyframes ─► video ─►
 **Errors.** Transient provider failures (network, 429, 5xx, bad clip) are retried 3 times with exponential backoff. Permanent ones (validation, auth, policy, budget) stop the run at once with a clear message and a `resume` command. Content failures (paraphrased script, misheard TTS) are retried with feedback or different settings. Every paid call first checks the run's `--budget`.
 
 **Nothing finished is paid for twice.** Every shot and every video take is saved as soon as it is ready and reused on a retry or `resume`. A submitted OpenRouter video job writes its id next to the output file (`<take>.raw.mp4.job.json`). If the process dies while the job is generating, the next attempt keeps waiting for that same job instead of submitting a new one.
+
+## Human review (optional)
+
+A run can pause for a person after the script and/or after the keyframes, before money goes to the next stage. The reviewer approves, sends the stage back with a note (it runs again with the note in the prompt and is shown again), or rejects the run.
+
+```bash
+npm run reel -- run --idea "..." --review script,keyframes
+#   ⏸  script ready for review   (title, characters, shots and lines are printed)
+#   [a]pprove · [r]edo with a note · [x] reject >
+```
+
+- **Where to answer.** In the terminal that started the run, or on the run's page in the UI (New run → "Human-in-the-loop checkpoints"). With a Temporal server, also from anywhere with `npm run reel -- review <runId> approve|redo|reject --note "..."`.
+- **What a redo does.** The script stage gets the previous script plus all notes. The keyframes stage gets the notes in the image prompt and a new seed.
+- **What is recorded.** Every decision goes into `manifest.json` (`reviews`), and the wait is in `awaitingReview`. A resumed run asks again unless the current output was already approved.
+- **Runner differences.** On Temporal the wait is a workflow waiting for the `review` signal. It survives restarts, and a run with no answer for 7 days is rejected. On the in-process runner the wait lives in that process: after a restart, `resume` the run and it asks again.
 
 ## Runners: in-process or Temporal
 

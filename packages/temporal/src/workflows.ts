@@ -2,8 +2,8 @@
  * Workflow code runs in Temporal's deterministic sandbox: no file system, network or clock here.
  * Everything with side effects is an activity (activities.ts); this file only decides the order.
  */
-import { log, proxyActivities } from "@temporalio/workflow";
-import type { StageName } from "@reel/core";
+import { condition, defineSignal, log, proxyActivities, setHandler } from "@temporalio/workflow";
+import type { ReviewDecision, ReviewGate, StageName } from "@reel/core";
 import type { Activities } from "./activities.ts";
 
 /** Same order as STAGES in @reel/core (checked by a test); copied because core cannot be bundled into the sandbox. */
@@ -23,6 +23,12 @@ const stages = proxyActivities<Activities>({
   retry: { maximumAttempts: 3, initialInterval: "30 seconds", backoffCoefficient: 2, nonRetryableErrorTypes: ["PermanentError"] },
 });
 
+/** A person's decision at a review gate. Sent from the UI, `reel review`, or the CLI prompt. */
+export const reviewSignal = defineSignal<[ReviewDecision]>("review");
+
+/** A run paused for review this long is stopped, so it does not wait forever. */
+const REVIEW_TIMEOUT = "7 days";
+
 export interface ReelRunArgs {
   runsRoot: string;
   runId: string;
@@ -33,14 +39,34 @@ export interface ReelRunArgs {
 }
 
 export async function reelRun({ runsRoot, runId, resume, from }: ReelRunArgs) {
-  if (!(await control.prepareRun(runsRoot, runId, resume, from))) return { status: "failed" as const, final: null, costUsd: 0 };
-  for (const stage of STAGE_ORDER) {
+  // Only a decision for the gate we are waiting at counts; late or duplicate ones are ignored.
+  let waitingAt: ReviewGate | null = null;
+  let decision: ReviewDecision | null = null;
+  setHandler(reviewSignal, (d) => {
+    if (d.gate === waitingAt && decision === null) decision = d;
+  });
+
+  const gates = await control.prepareRun(runsRoot, runId, resume, from);
+  if (!gates) return { status: "failed" as const, final: null, costUsd: 0 };
+  for (let i = 0; i < STAGE_ORDER.length; i++) {
+    const stage = STAGE_ORDER[i]!;
     try {
       await stages.runStage(runsRoot, runId, stage);
     } catch (err) {
       log.warn("stage failed", { runId, stage, error: String(err) });
       return control.finishRun(runsRoot, runId, stage);
     }
+    const gate = gates.find((g) => g === stage);
+    if (!gate || !(await control.requestReview(runsRoot, runId, gate))) continue;
+
+    waitingAt = gate;
+    decision = null;
+    const answered = await condition(() => decision !== null, REVIEW_TIMEOUT);
+    waitingAt = null;
+    const d: ReviewDecision = answered ? decision! : { gate, action: "reject", note: `no decision within ${REVIEW_TIMEOUT}` };
+    await control.applyReview(runsRoot, runId, d);
+    if (d.action === "reject") return control.finishRun(runsRoot, runId, stage);
+    if (d.action === "redo") i--; // the same stage again, now with the reviewer's note
   }
   return control.finishRun(runsRoot, runId, null);
 }

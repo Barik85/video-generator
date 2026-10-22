@@ -23,6 +23,13 @@ export function scriptUserMessage(req: ScriptRequest): string {
     req.quotedLines.length
       ? `Quoted lines that must appear verbatim:\n${req.quotedLines.map((l) => `- ${l}`).join("\n")}`
       : "No quoted dialogue in the idea.",
+    req.review?.notes.length
+      ? [
+          req.review.previous ? `A human reviewer read this script:\n${JSON.stringify(req.review.previous)}` : "A human reviewer read your script.",
+          `Their notes, oldest first:\n${req.review.notes.map((n) => `- ${n}`).join("\n")}`,
+          `Rewrite the script to address the notes. Keep what they did not ask to change. The hard rules still apply.`,
+        ].join("\n")
+      : "",
     req.feedback?.length ? `Your previous script was rejected:\n${req.feedback.map((f) => `- ${f}`).join("\n")}\nFix these issues.` : "",
   ]
     .filter(Boolean)

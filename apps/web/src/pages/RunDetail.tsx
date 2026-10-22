@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, fileUrl, STAGE_LABEL, STAGES, type Manifest, type RunDetail, type RunEvent, type StageName } from "../lib/api.ts";
+import { api, fileUrl, STAGE_LABEL, STAGES, type Manifest, type ReviewDecision, type RunDetail, type RunEvent, type StageName } from "../lib/api.ts";
 import { useRunEvents, type StreamState } from "../lib/useRunEvents.ts";
 import { runStatus } from "../lib/status.ts";
 import { formatBytes, formatDuration, formatTime, plural, secs } from "../lib/format.ts";
@@ -53,7 +53,7 @@ export function RunDetailPage() {
 function RunView({ detail, events, streamState, onResumed }: { detail: RunDetail; events: RunEvent[]; streamState: StreamState; onResumed: () => void }) {
   const { manifest: m, outputs, files } = detail;
   const status = runStatus(m, detail.active);
-  const running = m.status === "running" && !status.stale;
+  const running = m.status === "running" && !status.stale && !m.awaitingReview;
   const now = useNow(running);
   const elapsed = (running ? now : Date.parse(m.updatedAt)) - Date.parse(m.createdAt);
   const seconds = outputs.assemble?.seconds ?? outputs.plan?.totalSeconds ?? null;
@@ -94,6 +94,8 @@ function RunView({ detail, events, streamState, onResumed }: { detail: RunDetail
           )}
         </div>
       </div>
+
+      {m.awaitingReview && <ReviewCard m={m} />}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
         <Stat label="Duration">{seconds !== null ? secs(seconds) : `target ${m.input.targetSeconds} s`}</Stat>
@@ -189,6 +191,60 @@ function ResumeControl({ m, disabled, onResumed }: { m: Manifest; disabled: bool
       </div>
       {resume.error && <span className="text-[13px] text-fail">{resume.error.message}</span>}
     </div>
+  );
+}
+
+const REVIEW_HINT = {
+  script: "Read the shots and lines under Shots. Changing text costs cents; after approval the run pays for voice, keyframes and video.",
+  keyframes: "Check the character and the location in the keyframes under Shots. After approval the run pays for video, the most expensive step.",
+} as const;
+
+function ReviewCard({ m }: { m: Manifest }) {
+  const qc = useQueryClient();
+  const gate = m.awaitingReview!.gate;
+  const [note, setNote] = useState("");
+  const decide = useMutation({
+    mutationFn: (action: ReviewDecision["action"]) => api.review(m.runId, { gate, action, ...(note.trim() ? { note: note.trim() } : {}) }),
+    onSuccess: () => {
+      setNote("");
+      void qc.invalidateQueries({ queryKey: ["run", m.runId] });
+      void qc.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
+  const redos = m.reviews.filter((r) => r.gate === gate && r.action === "redo").length;
+  return (
+    <section aria-label="Review" className="flex flex-col gap-3 rounded-[14px] border border-accent-bd bg-accent-bg p-5 sm:p-6">
+      <h2 className="text-base font-semibold">
+        Waiting for your review: {STAGE_LABEL[gate]}
+        {redos > 0 && <span className="ml-2 text-sm font-normal text-muted">after {redos} redo{redos > 1 ? "s" : ""}</span>}
+      </h2>
+      <p className="text-sm text-soft">{REVIEW_HINT[gate]}</p>
+      <label htmlFor="review-note" className="text-[13px] text-muted">
+        Note for a redo (what should change)
+      </label>
+      <textarea
+        id="review-note"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        maxLength={2000}
+        className="rounded-[10px] border border-line-strong bg-ground px-3 py-2 text-fg"
+        placeholder={gate === "script" ? "e.g. make it sunset, and let the cashier answer" : "e.g. she should look older, darker coat"}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => decide.mutate("approve")} disabled={decide.isPending} className={buttonClass.primary}>
+          Approve
+        </button>
+        <button type="button" onClick={() => decide.mutate("redo")} disabled={decide.isPending || !note.trim()} className={buttonClass.secondary} title={note.trim() ? undefined : "Write a note first"}>
+          Redo with note
+        </button>
+        <button type="button" onClick={() => decide.mutate("reject")} disabled={decide.isPending} className={buttonClass.secondary}>
+          Reject and stop
+        </button>
+        {decide.isPending && <Spinner className="self-center" />}
+      </div>
+      {decide.error && <span className="text-[13px] text-fail">{decide.error.message}</span>}
+    </section>
   );
 }
 

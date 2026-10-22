@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api.ts";
+import { api, type ReviewGate } from "../lib/api.ts";
 import { estimate, modelFor, usd } from "../lib/pricing.ts";
 import { lockedLines, shellQuote, words } from "../lib/text.ts";
 import { plural } from "../lib/format.ts";
@@ -11,10 +11,9 @@ const DURATIONS = [8, 15, 20, 30] as const;
 const DEFAULT_IDEA =
   'A night gas station in the rain. A girl in a red raincoat slides an envelope to the cashier and says: "You know what is inside. Do not open it until morning."';
 
-const HITL = [
-  { title: "Approve the script before rendering", hint: "The cheapest checkpoint: a text fix costs cents, a video fix costs dollars." },
-  { title: "Approve the keyframes", hint: "Check the character and location before generating video." },
-  { title: "Auto-retry on QA failure (up to 2 times)", hint: "Only the failed shot is regenerated; the audio and script stay the same." },
+const HITL: Array<{ gate: ReviewGate; title: string; hint: string }> = [
+  { gate: "script", title: "Approve the script before rendering", hint: "The cheapest checkpoint: a text fix costs cents, a video fix costs dollars." },
+  { gate: "keyframes", title: "Approve the keyframes", hint: "Check the character and location before generating video." },
 ];
 
 const choice = (selected: boolean) =>
@@ -24,12 +23,15 @@ export function NewRunPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
-  const presets = meta.data?.presets ?? ["mock", "seedance-fast", "seedance-2.5"];
+  const presets = meta.data?.presets ?? ["mock", "mock-native"];
+  const missing = meta.data?.missingKeys ?? {};
 
   const [idea, setIdea] = useState(DEFAULT_IDEA);
   const [seconds, setSeconds] = useState<number>(15);
-  const [preset, setPreset] = useState("seedance-fast");
+  const [preset, setPreset] = useState("mock-native");
   const [budget, setBudget] = useState("8");
+  const [review, setReview] = useState<ReviewGate[]>(["script"]);
+  const reviewSupported = meta.data?.runner !== "fake";
 
   const budgetUsd = Number(budget);
   const est = estimate(preset, seconds);
@@ -39,7 +41,7 @@ export function NewRunPage() {
   const valid = idea.trim().length > 0 && Number.isFinite(budgetUsd) && budgetUsd > 0;
 
   const create = useMutation({
-    mutationFn: () => api.create({ idea: idea.trim(), targetSeconds: seconds, preset, budgetUsd }),
+    mutationFn: () => api.create({ idea: idea.trim(), targetSeconds: seconds, preset, budgetUsd, review: reviewSupported ? review : [] }),
     onSuccess: ({ runId }) => {
       void qc.invalidateQueries({ queryKey: ["runs"] });
       void navigate(`/runs/${runId}`);
@@ -51,7 +53,7 @@ export function NewRunPage() {
     if (valid && !create.isPending) create.mutate();
   };
 
-  const cli = `npm run reel -- run --idea ${shellQuote(idea.trim())} --seconds ${seconds} --preset ${preset} --budget ${Number.isFinite(budgetUsd) ? budgetUsd : 8}`;
+  const cli = `npm run reel -- run --idea ${shellQuote(idea.trim())} --seconds ${seconds} --preset ${preset} --budget ${Number.isFinite(budgetUsd) ? budgetUsd : 8}${review.length ? ` --review ${review.join(",")}` : ""}`;
 
   return (
     <main className="mx-auto max-w-[1280px] px-4 pb-16 pt-8 sm:px-6">
@@ -119,19 +121,23 @@ export function NewRunPage() {
                 {presets.map((p) => {
                   const m = modelFor(p);
                   const sel = p === preset;
+                  const needs = missing[p];
                   return (
                     <button
                       key={p}
                       type="button"
                       aria-pressed={sel}
+                      disabled={!!needs}
+                      title={needs ? `Needs ${needs.join(", ")} in .env` : undefined}
                       onClick={() => setPreset(p)}
-                      className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left ${sel ? "border-accent bg-accent-bg" : "border-line-strong bg-ground hover:border-muted"}`}
+                      className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left disabled:cursor-not-allowed disabled:opacity-50 ${sel ? "border-accent bg-accent-bg" : "border-line-strong bg-ground hover:border-muted"}`}
                     >
                       <span className="font-semibold text-fg">{m.name}</span>
                       <span className={`text-[13px] ${sel ? "text-accent-hi" : "text-muted"}`}>{m.how}</span>
                       <span className={`font-mono text-xs ${sel ? "text-soft" : "text-muted"}`}>
                         {p} · {m.price}
                       </span>
+                      {needs && <span className="text-xs text-muted">needs {needs.join(", ")}</span>}
                     </button>
                   );
                 })}
@@ -157,14 +163,21 @@ export function NewRunPage() {
           </Card>
 
           <Card as="div" className="flex flex-col gap-3.5">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-semibold">Human-in-the-loop checkpoints</span>
-              <span className="rounded border border-line-strong px-1.5 text-xs text-muted">soon</span>
-            </div>
-            <p className="-mt-2 text-[13px] text-muted">The pipeline has no approval gates yet; these options will appear once the core supports them.</p>
-            {HITL.map((h, i) => (
-              <label key={h.title} className="flex cursor-not-allowed items-start gap-3 opacity-60">
-                <input type="checkbox" disabled defaultChecked={i !== 1} className="mt-0.5 h-5 w-5 accent-accent" />
+            <span className="font-semibold">Human-in-the-loop checkpoints</span>
+            <p className="-mt-2 text-[13px] text-muted">
+              {reviewSupported
+                ? "The run pauses after the checked stages until you approve, send it back with a note, or reject it."
+                : "Not available with the fake runner."}
+            </p>
+            {HITL.map((h) => (
+              <label key={h.gate} className={`flex items-start gap-3 ${reviewSupported ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}>
+                <input
+                  type="checkbox"
+                  disabled={!reviewSupported}
+                  checked={review.includes(h.gate)}
+                  onChange={(e) => setReview((r) => (e.target.checked ? [...r, h.gate] : r.filter((g) => g !== h.gate)))}
+                  className="mt-0.5 h-5 w-5 accent-accent"
+                />
                 <span>
                   <span className="block font-medium">{h.title}</span>
                   <span className="text-[13px] text-muted">{h.hint}</span>

@@ -5,10 +5,10 @@ import { Readable } from "node:stream";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { streamSSE } from "hono/streaming";
-import { PIPELINE_VERSION, PRESETS, RunInput, RunStore, STAGES } from "@reel/core";
+import { PIPELINE_VERSION, PRESETS, missingKeys, type PresetName, ReviewDecision, RunInput, RunStore, STAGES } from "@reel/core";
 import { z } from "zod";
 import { RUNNER, RUNS_ROOT } from "./env.ts";
-import { isActive, launchResume, launchRun } from "./jobs.ts";
+import { isActive, launchResume, launchRun, submitReview } from "./jobs.ts";
 import { CONTENT_TYPES, listFiles, readManifest, readOutputs, runDir, safeResolve } from "./run-files.ts";
 
 export const app = new Hono();
@@ -21,8 +21,19 @@ app.onError((err, c) => {
 });
 
 app.get("/api/meta", (c) =>
-  c.json({ pipelineVersion: PIPELINE_VERSION, runner: RUNNER, runsRoot: RUNS_ROOT, presets: Object.keys(PRESETS), stages: STAGES }),
+  c.json({ pipelineVersion: PIPELINE_VERSION, runner: RUNNER, runsRoot: RUNS_ROOT, presets: Object.keys(PRESETS), missingKeys: keysReport(), stages: STAGES }),
 );
+
+/** Presets that cannot run here, with the env keys they are missing. The fake runner needs none. */
+function keysReport(): Record<string, string[]> {
+  if (RUNNER === "fake") return {};
+  const report: Record<string, string[]> = {};
+  for (const p of Object.keys(PRESETS) as PresetName[]) {
+    const m = missingKeys(p);
+    if (m.length) report[p] = m;
+  }
+  return report;
+}
 
 app.get("/api/runs", async (c) => {
   const runs = await RunStore.list(RUNS_ROOT);
@@ -36,6 +47,8 @@ app.post("/api/runs", async (c) => {
   if (!(parsed.data.preset in PRESETS)) {
     return c.json({ error: `unknown preset "${parsed.data.preset}"`, presets: Object.keys(PRESETS) }, 400);
   }
+  const missing = RUNNER === "fake" ? [] : missingKeys(parsed.data.preset as PresetName);
+  if (missing.length) return c.json({ error: `preset ${parsed.data.preset} needs ${missing.join(", ")} in .env` }, 400);
   const runId = await launchRun(parsed.data);
   return c.json({ runId }, 202);
 });
@@ -57,6 +70,23 @@ app.post("/api/runs/:id/resume", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid body", issues: parsed.error.issues }, 400);
   try {
     await launchResume(runId, parsed.data.from);
+  } catch (e) {
+    const status = (e as { status?: number }).status === 409 ? 409 : 500;
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, status);
+  }
+  return c.json({ runId }, 202);
+});
+
+app.post("/api/runs/:id/review", async (c) => {
+  const runId = c.req.param("id");
+  const manifest = await readManifest(runId);
+  if (!manifest) return c.json({ error: "run not found" }, 404);
+  const parsed = ReviewDecision.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid body", issues: parsed.error.issues }, 400);
+  if (manifest.awaitingReview?.gate !== parsed.data.gate) return c.json({ error: `run is not waiting for review of ${parsed.data.gate}` }, 409);
+  if (parsed.data.action === "redo" && !parsed.data.note?.trim()) return c.json({ error: "a redo needs a note saying what to change" }, 400);
+  try {
+    await submitReview(runId, parsed.data);
   } catch (e) {
     const status = (e as { status?: number }).status === 409 ? 409 : 500;
     return c.json({ error: e instanceof Error ? e.message : String(e) }, status);

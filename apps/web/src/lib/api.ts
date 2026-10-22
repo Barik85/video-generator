@@ -1,5 +1,7 @@
 import type {
   AssembleOutput,
+  ReviewDecision,
+  ReviewGate,
   Manifest,
   MediaOutput,
   PlanOutput,
@@ -11,7 +13,7 @@ import type {
   VoiceOutput,
 } from "@reel/core";
 
-export type { Manifest, RunEvent, StageName, Script, QaOutput };
+export type { Manifest, RunEvent, StageName, Script, QaOutput, ReviewDecision, ReviewGate };
 
 export const STAGES = ["script", "voice", "plan", "keyframes", "video", "assemble", "qa"] as const satisfies readonly StageName[];
 
@@ -30,6 +32,8 @@ export interface Meta {
   runner: "core" | "temporal" | "fake";
   runsRoot: string;
   presets: string[];
+  /** Presets that cannot run on this server, with the env keys they lack. */
+  missingKeys: Record<string, string[]>;
   stages: StageName[];
 }
 
@@ -80,6 +84,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(from ? { from } : {}),
     }),
+  review: (id: string, decision: ReviewDecision) =>
+    req<{ runId: string }>(`/api/runs/${encodeURIComponent(id)}/review`, { method: "POST", body: JSON.stringify(decision) }),
 };
 
 export const fileUrl = (runId: string, rel: string, download = false) =>

@@ -18,6 +18,14 @@ export function providersFor(presetName: string): Providers {
   return providers;
 }
 
+/** Env keys a preset needs that are not set; empty when the preset can run here. */
+export function missingKeys(presetName: PresetName): string[] {
+  const p = PRESETS[presetName];
+  if (p.video === "mock") return [];
+  const need = p.video.startsWith("openrouter:") ? ["OPENROUTER_API_KEY"] : ["FAL_KEY", "ANTHROPIC_API_KEY"];
+  return need.filter((n) => !process.env[n] && !(n === "ANTHROPIC_API_KEY" && process.env.ANTHROPIC_AUTH_TOKEN));
+}
+
 function build(p: (typeof PRESETS)[PresetName]): Providers {
   if (p.video === "mock") {
     return { llm: new MockLlm(), tts: new MockTts(), image: new MockImage(), video: new MockVideo(), asr: new MockAsr() };

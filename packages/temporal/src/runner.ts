@@ -4,9 +4,9 @@ import path from "node:path";
 import { Client, Connection } from "@temporalio/client";
 import { DefaultLogger, NativeConnection, Runtime, Worker } from "@temporalio/worker";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
-import { RunStore, type Manifest, type RunEvent, type RunInput, type RunOptions, type StageName } from "@reel/core";
+import { RunStore, type Manifest, type ReviewDecision, type RunEvent, type RunInput, type RunOptions, type StageName } from "@reel/core";
 import { activities } from "./activities.ts";
-import { reelRun, type ReelRunArgs } from "./workflows.ts";
+import { reelRun, reviewSignal, type ReelRunArgs } from "./workflows.ts";
 
 export const TASK_QUEUE = "reel";
 export const WORKFLOWS_PATH = path.join(import.meta.dirname, "workflows.ts");
@@ -75,12 +75,30 @@ export async function resumeRun(opts: RunOptions & { runId: string; from?: Stage
   return runWorkflow(opts, { runsRoot: opts.runsRoot, runId: opts.runId, resume: true, from: opts.from ?? null });
 }
 
+/** Sends a review decision to a run that is paused at a gate. */
+export async function sendReview(runId: string, decision: ReviewDecision): Promise<void> {
+  const { client } = await connectTemporal();
+  await client.workflow.getHandle(runId).signal(reviewSignal, decision);
+}
+
 async function runWorkflow(opts: RunOptions, args: ReelRunArgs): Promise<Manifest> {
   const { client } = await connectTemporal();
-  const stop = opts.onEvent ? followEvents(path.join(opts.runsRoot, args.runId, "events.jsonl"), opts.onEvent) : null;
+  const workflowId = args.runId; // Temporal then refuses a second concurrent execution of one run
+  const onEvent = (e: RunEvent) => {
+    opts.onEvent?.(e);
+    // A local prompt is one way to answer a gate; the UI or `reel review` can answer it too.
+    if (e.type === "review.wait" && opts.onReview) {
+      const gate = e.data?.gate as ReviewDecision["gate"];
+      void opts
+        .onReview(gate, args.runId)
+        .then((d) => client.workflow.getHandle(workflowId).signal(reviewSignal, { ...d, gate }))
+        .catch(() => {}); // prompt cancelled or workflow already moved on
+    }
+  };
+  // Follow the log before starting, so not even the first events are missed.
+  const stop = opts.onEvent || opts.onReview ? followEvents(path.join(opts.runsRoot, args.runId, "events.jsonl"), onEvent) : null;
   try {
-    // The workflow id is the run id: Temporal then refuses a second concurrent execution of one run.
-    const handle = await client.workflow.start(reelRun, { taskQueue: TASK_QUEUE, workflowId: args.runId, args: [args] });
+    const handle = await client.workflow.start(reelRun, { taskQueue: TASK_QUEUE, workflowId, args: [args] });
     await handle.result();
   } finally {
     await stop?.();
