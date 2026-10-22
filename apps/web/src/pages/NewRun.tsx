@@ -16,6 +16,12 @@ const HITL: Array<{ gate: ReviewGate; title: string; hint: string }> = [
   { gate: "keyframes", title: "Approve the keyframes", hint: "Check the character and location before generating video." },
 ];
 
+const TAG_CLASS = {
+  recommended: "bg-accent-bg text-accent-hi",
+  fallback: "bg-ground text-muted border border-line-strong",
+  legacy: "bg-ground text-muted border border-line-strong",
+} as const;
+
 const choice = (selected: boolean) =>
   selected ? "border-accent bg-accent-bg text-fg font-semibold" : "border-line-strong bg-ground text-soft hover:border-muted";
 
@@ -132,7 +138,10 @@ export function NewRunPage() {
                       onClick={() => setPreset(p)}
                       className={`flex flex-col gap-1 rounded-xl border p-3.5 text-left disabled:cursor-not-allowed disabled:opacity-50 ${sel ? "border-accent bg-accent-bg" : "border-line-strong bg-ground hover:border-muted"}`}
                     >
-                      <span className="font-semibold text-fg">{m.name}</span>
+                      <span className="flex items-center justify-between gap-2 font-semibold text-fg">
+                        {m.name}
+                        {m.tag && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${TAG_CLASS[m.tag]}`}>{m.tag}</span>}
+                      </span>
                       <span className={`text-[13px] ${sel ? "text-accent-hi" : "text-muted"}`}>{m.how}</span>
                       <span className={`font-mono text-xs ${sel ? "text-soft" : "text-muted"}`}>
                         {p} · {m.price}

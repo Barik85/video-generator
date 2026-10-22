@@ -14,9 +14,18 @@ const OR = {
   asr: "openrouter:elevenlabs/scribe-v2",
 } as const;
 
+// Order is the order of recommendation; the UI lists presets in it. See docs/adr/0002.
 export const PRESETS = {
-  mock: { llm: "mock", tts: "mock", image: "mock", video: "mock", asr: "mock", audio: "lipsync" },
+  // Recommended: the video model speaks the line, ASR checks every take.
+  "or-seedance-native": { ...OR, video: "openrouter:bytedance/seedance-2.0-fast", audio: "native" },
+  "or-kling-native": { ...OR, video: "openrouter:kwaivgi/kling-v3.0-std", audio: "native" },
+  "or-veo-native": { ...OR, video: "openrouter:google/veo-3.1-lite", audio: "native" },
+  // Offline, for testing the pipeline.
   "mock-native": { llm: "mock", tts: "mock", image: "mock", video: "mock", asr: "mock", audio: "native" },
+  mock: { llm: "mock", tts: "mock", image: "mock", video: "mock", asr: "mock", audio: "lipsync" },
+  // Fallback for lines native audio cannot say verbatim (non-English, rare names). Sounds dry, voice by gender only.
+  "or-seedance-lipsync": { ...OR, video: "openrouter:bytedance/seedance-2.0-fast", audio: "lipsync" },
+  // Legacy: the first version, Claude direct + fal.ai (ADR 0001 moved everything to OpenRouter).
   "seedance-fast": {
     llm: "anthropic",
     tts: "fal-elevenlabs-v3",
@@ -33,10 +42,6 @@ export const PRESETS = {
     asr: "fal-elevenlabs-scribe",
     audio: "lipsync",
   },
-  "or-seedance-lipsync": { ...OR, video: "openrouter:bytedance/seedance-2.0-fast", audio: "lipsync" },
-  "or-seedance-native": { ...OR, video: "openrouter:bytedance/seedance-2.0-fast", audio: "native" },
-  "or-veo-native": { ...OR, video: "openrouter:google/veo-3.1-lite", audio: "native" },
-  "or-kling-native": { ...OR, video: "openrouter:kwaivgi/kling-v3.0-std", audio: "native" },
 } as const;
 export type PresetName = keyof typeof PRESETS;
 export type Preset = (typeof PRESETS)[PresetName];

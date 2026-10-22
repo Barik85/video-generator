@@ -13,21 +13,26 @@ Requirements: Node ≥ 22 and `ffmpeg`/`ffprobe` on PATH (`brew install ffmpeg`)
 | Key | Presets | Used for |
 |---|---|---|
 | `OPENROUTER_API_KEY` | `or-*` | everything through one key: Claude Opus 5.5 (script), ElevenLabs v3 (TTS), Scribe v2 (ASR), Seedream 5.0 Flash (keyframes), Seedance 2.0 Fast / Veo 3.1 Lite / Kling v3 (video) |
-| `ANTHROPIC_API_KEY` + `FAL_KEY` | `seedance-fast`, `seedance-2.5` | the same pipeline with Claude direct plus fal.ai |
+| `ANTHROPIC_API_KEY` + `FAL_KEY` | `seedance-fast`, `seedance-2.5` (legacy) | the first version: Claude direct plus fal.ai, lip-sync only |
 
 The `mock` and `mock-native` presets (the default is `mock`) need no keys. They run the same orchestration, state, assembly and QA code with offline stand-ins: ffmpeg gradients for the picture and macOS `say` for the voice.
 
-### Two ways to get the line into the video
+### How the line gets into the video
 
-| Mode | Presets | How | Trade-off |
-|---|---|---|---|
-| **lipsync** | `seedance-fast`, `seedance-2.5`, `or-seedance-lipsync` | TTS line → ASR-verified → passed to Seedance as `@Audio1` → the TTS track is the final soundtrack | Words are guaranteed before any video spend; lip-sync quality depends on how well the model follows `@Audio1` |
-| **native** | `or-seedance-native`, `or-veo-native`, `or-kling-native` | The line goes into the prompt in quotes → the model speaks it itself → each take is transcribed and regenerated on a mismatch (`REEL_VIDEO_TAKES`, default 3) → the clip's own audio is the soundtrack | Natural voice and lip-sync, but the words are probabilistic and every retake costs a full clip. The closest take is kept, and QA flags it if it is still not verbatim |
+**Default: native audio** (`or-seedance-native`, then `or-kling-native`). The line goes into the video prompt in quotes and the model speaks it itself. Every take is transcribed and regenerated on a mismatch (`REEL_VIDEO_TAKES`, default 3); the clip's own audio is the soundtrack. The closest take is kept, and QA fails the run if it is still not verbatim. All English dialogue shots in `examples/` passed on the first take.
+
+**Fallback: TTS lip-sync** (`or-seedance-lipsync`). The line is spoken by ElevenLabs TTS, checked by ASR, and passed to Seedance as `@Audio1`; the TTS track is the final soundtrack. The words are guaranteed before any video spend, and a retry costs cents instead of a clip. It is kept only for lines native audio cannot say verbatim: non-English (Ukrainian drifted toward Russian in 3 paid takes), rare names, numbers. Known problems from real runs:
+- the voice sounds dry and detached from the scene: no room tone, rain or reverb;
+- the voice is picked by gender only, so a six-year-old boy got an adult male voice.
+
+Switching to the fallback is manual for now: re-run with the lip-sync preset. Why and how this was decided: [ADR 0002](docs/adr/0002-dialogue-audio-native-first.md).
+
+`seedance-fast` and `seedance-2.5` are the first version of the pipeline (Claude direct plus fal.ai, lip-sync only). They are kept as legacy and need `ANTHROPIC_API_KEY` + `FAL_KEY`; [ADR 0001](docs/adr/0001-openrouter-as-single-gateway.md) explains the move to OpenRouter.
 
 ## Commands
 
 ```bash
-npm run reel -- run --idea "..." [--seconds 15] [--preset mock|mock-native|or-seedance-native|or-veo-native|or-seedance-lipsync|...] [--budget 8] [--runner local|temporal] [--review script,keyframes]
+npm run reel -- run --idea "..." [--seconds 15] [--preset or-seedance-native|or-kling-native|mock-native|mock|or-seedance-lipsync|...] [--budget 8] [--runner local|temporal] [--review script,keyframes]
 npm run reel -- review <runId> approve|redo|reject [--note "..."]   # answer a paused run (Temporal server)
 npm run reel -- resume <runId> [--from video]   # continue after a failure, or redo from a stage
 npm run reel -- ls
