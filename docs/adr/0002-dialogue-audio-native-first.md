@@ -33,6 +33,13 @@ What the lipsync run showed:
 - **`@Audio1` does drive the lips.** The pause between the two sentences sits at 2.34–2.72 s in our track and at 2.32–2.87 s in the model's raw audio. The mouth is closed before and after the line and moves during it. The model even re-voiced the line in its own raw audio ("You know what's inside. Do not open it until morning.").
 - **The final file still sounds worse.** The soundtrack is a dry studio TTS with no rain, room tone or reverb. The voice is picked only by the character's gender. The person who reviewed the videos judged the native versions good and the lipsync one bad.
 
+Added 2026-10-22, a scene with a six-year-old boy speaking ("A sunny wedding reception on a rooftop…"):
+
+| Run | Mode / model | Takes | WER | Result | Cost |
+|---|---|---|---|---|---|
+| `run_20261022115820_a179` | lipsync / Seedance 2.0 Fast + ElevenLabs v3 | — | 0 (TTS) | rejected at the keyframes review: the boy got the adult male TTS voice (median pitch ~118 Hz), because the script's voice field is only `female`/`male` | $0.08 |
+| `run_20261022120735_cfc7` | native / Seedance 2.0 Fast | 1 | 0 | pass, 15 s; median pitch ~242 Hz | $1.46 |
+
 What the Ukrainian native run showed: Seedance's native speech in Ukrainian drifts toward Russian, and 3 paid takes ($1.37 on that one shot) did not produce a verbatim line. In English, 4 of 4 dialogue shots passed on the first take.
 
 ## Decision

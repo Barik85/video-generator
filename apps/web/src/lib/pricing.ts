@@ -21,6 +21,8 @@ export interface VideoModel {
   step: string;
   /** false → runs offline, nothing is billed */
   paid: boolean;
+  /** Shown as a badge on the preset card (see docs/adr/0002) */
+  tag?: "recommended" | "fallback" | "legacy";
 }
 
 export const VIDEO_MODELS: Record<string, VideoModel> = {
@@ -35,21 +37,23 @@ export const VIDEO_MODELS: Record<string, VideoModel> = {
   },
   "seedance-fast": {
     name: "Seedance 2.0 Fast",
-    how: "Lips follow our audio (@Audio1)",
+    how: "First version via fal.ai, lips follow our TTS track (@Audio1)",
     rate: 0.2419,
     extra: 0,
     price: "$0.24/s · 720p",
     step: "Seedance: video lip-synced to the TTS track",
     paid: true,
+    tag: "legacy",
   },
   "seedance-2.5": {
     name: "Seedance 2.5",
-    how: "Higher quality, same lip-sync to TTS",
+    how: "First version via fal.ai, same lip-sync to TTS",
     rate: 0.473,
     extra: 0,
     price: "$0.47/s · 720p",
     step: "Seedance 2.5: video lip-synced to the TTS track",
     paid: true,
+    tag: "legacy",
   },
   "mock-native": {
     name: "Mock, native audio",
@@ -62,12 +66,13 @@ export const VIDEO_MODELS: Record<string, VideoModel> = {
   },
   "or-seedance-lipsync": {
     name: "Seedance 2.0 Fast · OpenRouter",
-    how: "Lips follow our TTS audio (@Audio1)",
+    how: "Lips follow our TTS track. Only for lines native audio cannot say verbatim: dry studio voice, picked by gender only",
     rate: 0.091,
     extra: 0,
     price: "~$0.09/s · 720p",
     step: "Seedance (OpenRouter): lip-sync to the TTS track",
     paid: true,
+    tag: "fallback",
   },
   "or-seedance-native": {
     name: "Seedance 2.0 Fast · native audio",
@@ -77,6 +82,7 @@ export const VIDEO_MODELS: Record<string, VideoModel> = {
     price: "~$0.09/s · 720p",
     step: "Seedance (OpenRouter): video with voice + ASR check",
     paid: true,
+    tag: "recommended",
   },
   "or-veo-native": {
     name: "Veo 3.1 Lite · native audio",
