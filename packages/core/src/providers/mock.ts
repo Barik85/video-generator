@@ -7,7 +7,8 @@ import type { AsrProvider, ImageProvider, LlmProvider, ScriptRequest, TtsProvide
 /**
  * Offline providers. They exercise the real orchestration, state, media assembly and QA code
  * paths; only the "intelligence" is faked. Set REEL_MOCK_FAIL=video:1 to inject a transient
- * failure on the first video call (to demo retries).
+ * failure on the first video call (to demo retries), and REEL_MOCK_VIDEO_MS=20000 to make each clip
+ * take that long, like a real provider (to demo killing a worker mid-stage).
  */
 const failPlan = new Map(
   (process.env.REEL_MOCK_FAIL ?? "")
@@ -26,10 +27,9 @@ export class MockLlm implements LlmProvider {
   name = "mock:llm";
   async writeScript(req: ScriptRequest) {
     const lines = req.quotedLines.length ? req.quotedLines : [firstSentence(req.idea)];
-    const language = /[а-яіїєґ]/i.test(req.idea) ? "uk" : "en";
     const script: Script = {
       title: firstSentence(req.idea).slice(0, 40),
-      language,
+      language: "en",
       logline: req.idea,
       style: "cinematic, moody, shallow depth of field",
       characters: [{ id: "hero", name: "Hero", look: "woman in her 30s, red raincoat, dark wet hair", voice: "female" }],
@@ -76,10 +76,23 @@ export class MockVideo implements VideoProvider {
   name = "mock:zoompan";
   minSeconds = 4;
   maxSeconds = 15;
+  acceptsAudio = true;
   usdPerSecond = 0;
-  async generate({ imageFile, seconds, outFile }: Parameters<VideoProvider["generate"]>[0]) {
+  async generate({ prompt, imageFile, audioFile, seconds, outFile }: Parameters<VideoProvider["generate"]>[0]) {
     maybeFail("video");
-    await mockVideoFromImage(imageFile, seconds, outFile);
+    await new Promise((r) => setTimeout(r, Number(process.env.REEL_MOCK_VIDEO_MS ?? 0)));
+    if (audioFile) {
+      await mockVideoFromImage(imageFile, seconds, outFile);
+      return { usd: 0, seed: null };
+    }
+    // Native-audio stand-in: "speak" the quoted words from the prompt, like a real model would.
+    const silent = `${outFile}.silent.mp4`;
+    await mockVideoFromImage(imageFile, seconds, silent);
+    const said = [...prompt.matchAll(/"([^"]+)"/g)].map((m) => m[1]).join(" ");
+    const voice = `${outFile}.voice.mp3`;
+    if (said) await new MockTts().speak({ text: said, voice: "female", language: "en", outFile: voice, attempt: 1 });
+    const audioIn = said ? ["-i", voice] : ["-f", "lavfi", "-i", `anullsrc=r=48000:cl=mono:d=${seconds}`];
+    await ffmpeg(["-i", silent, ...audioIn, "-af", "adelay=800:all=1,apad", "-t", String(seconds), "-c:v", "copy", "-c:a", "aac", outFile]);
     return { usd: 0, seed: null };
   }
 }

@@ -5,46 +5,47 @@ import type { Script } from "./schemas.ts";
 
 describe("verbatim text utils", () => {
   it("extracts quoted lines in several quote styles", () => {
-    expect(extractQuotedLines('Вона каже: «Ти знаєш, що там.» А він: "Ні."')).toEqual(["Ти знаєш, що там.", "Ні."]);
+    expect(extractQuotedLines('She says: «You know what is inside.» He: "No."')).toEqual(["You know what is inside.", "No."]);
     expect(extractQuotedLines("He says “Run!” and „Stop“")).toEqual(["Run!", "Stop"]);
     expect(extractQuotedLines("no quotes here")).toEqual([]);
   });
 
   it("normalizes case, punctuation and apostrophes", () => {
-    expect(normalizeWords("Don’t — STOP, м'ята!")).toEqual(["don't", "stop", "м'ята"]);
+    expect(normalizeWords("Don’t — STOP, naïve o'clock!")).toEqual(["don't", "stop", "naïve", "o'clock"]);
+    expect(normalizeWords("[rain falling] You know. (door closes)")).toEqual(["you", "know"]);
   });
 
   it("WER is 0 for the same words and >0 for a paraphrase", () => {
-    expect(wordErrorRate("Ти знаєш, що там.", "ти знаєш що там")).toBe(0);
-    expect(wordErrorRate("Не відкривай до ранку", "не відкривай до вечора")).toBeCloseTo(0.25);
+    expect(wordErrorRate("You know what is inside.", "you know what is inside")).toBe(0);
+    expect(wordErrorRate("Do not open it until morning", "do not open it until evening")).toBeCloseTo(1 / 6);
     expect(wordErrorRate("one two three", "one three")).toBeCloseTo(1 / 3);
   });
 });
 
 const base: Script = {
   title: "t",
-  language: "uk",
+  language: "en",
   logline: "l",
   style: "s",
   characters: [{ id: "a", name: "A", look: "x", voice: "female" }, { id: "b", name: "B", look: "y", voice: "male" }],
-  lines: [{ id: "l1", characterId: "a", text: "Ти знаєш, що там." }],
+  lines: [{ id: "l1", characterId: "a", text: "You know what is inside." }],
   shots: [{ id: "s1", visual: "v", camera: "c", characterIds: ["a"], lineIds: ["l1"], approxSeconds: 5 }],
 };
 
 describe("validateScript", () => {
   it("accepts a script that keeps the quoted line verbatim", () => {
-    expect(validateScript(base, ["Ти знаєш, що там."])).toEqual([]);
+    expect(validateScript(base, ["You know what is inside."])).toEqual([]);
   });
 
   it("rejects a paraphrased quoted line", () => {
-    const s = { ...base, lines: [{ id: "l1", characterId: "a", text: "Ти ж знаєш, що там." }] };
-    expect(validateScript(s, ["Ти знаєш, що там."])[0]).toMatch(/verbatim/);
+    const s = { ...base, lines: [{ id: "l1", characterId: "a", text: "You do know what is inside." }] };
+    expect(validateScript(s, ["You know what is inside."])[0]).toMatch(/verbatim/);
   });
 
   it("rejects unused lines and two speakers in one shot", () => {
     const s: Script = {
       ...base,
-      lines: [...base.lines, { id: "l2", characterId: "b", text: "Ні." }, { id: "l3", characterId: "b", text: "Так." }],
+      lines: [...base.lines, { id: "l2", characterId: "b", text: "No." }, { id: "l3", characterId: "b", text: "Yes." }],
       shots: [{ ...base.shots[0]!, lineIds: ["l1", "l2"] }],
     };
     const errs = validateScript(s, []).join(" | ");

@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile, appendFile, readdir } from "node:fs
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import { Manifest, RunEvent, STAGES, type RunInput, type StageName, type StageRecord } from "./schemas.ts";
+import { Manifest, RunEvent, STAGES, type ReviewDecision, type ReviewGate, type RunInput, type StageName, type StageRecord } from "./schemas.ts";
 
 export const PIPELINE_VERSION = "0.1.0";
 
@@ -40,6 +40,8 @@ export class RunStore {
       stages,
       cost: { totalUsd: 0, items: [] },
       final: null,
+      awaitingReview: null,
+      reviews: [],
     };
     const store = new RunStore(dir, manifest);
     await store.save();
@@ -90,6 +92,18 @@ export class RunStore {
   async setStatus(status: Manifest["status"], final?: string) {
     this.manifest.status = status;
     if (final !== undefined) this.manifest.final = final;
+    await this.save();
+  }
+
+  async setAwaitingReview(gate: ReviewGate | null) {
+    this.manifest.awaitingReview = gate ? { gate, since: now() } : null;
+    await this.save();
+  }
+
+  /** Records a decision and ends the wait. */
+  async addReview(d: ReviewDecision) {
+    this.manifest.reviews.push({ ...d, at: now() });
+    this.manifest.awaitingReview = null;
     await this.save();
   }
 

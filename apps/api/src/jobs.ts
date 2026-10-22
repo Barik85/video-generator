@@ -1,19 +1,41 @@
 /**
  * Background execution of runs.
  *
- * PoC: runs execute as in-process promises. If the API process dies, the run folder stays
- * consistent (RunStore writes atomically) and can be continued with "resume". The next step for
- * production is a real queue + worker (e.g. BullMQ/SQS + a separate worker process), with the API
- * only enqueueing jobs and serving the run folders.
+ * With REEL_RUNNER=core runs execute as in-process promises. If the API process dies, the run
+ * folder stays consistent (RunStore writes atomically) and can be continued with "resume".
+ * With REEL_RUNNER=temporal the API only starts a workflow and waits for it; the stages run on a
+ * Temporal worker, which survives API restarts when TEMPORAL_ADDRESS points at a real server.
  */
 import { readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { resumeRun, startRun, type Manifest, type RunInput, type StageName } from "@reel/core";
+import { resumeRun, startRun, type Manifest, type ReviewDecision, type ReviewGate, type RunInput, type StageName } from "@reel/core";
 import { RUNNER, RUNS_ROOT } from "./env.ts";
 import { fakeResumeRun, fakeStartRun, type RunnerOptions } from "./fake/simulate.ts";
 
-const runner = RUNNER === "fake" ? { start: fakeStartRun, resume: fakeResumeRun } : { start: startRun, resume: resumeRun };
+const temporal = RUNNER === "temporal" ? await import("@reel/temporal") : null;
+const runner =
+  RUNNER === "fake"
+    ? { start: fakeStartRun, resume: fakeResumeRun }
+    : temporal
+      ? { start: temporal.startRun, resume: temporal.resumeRun }
+      : { start: startRun, resume: resumeRun };
+
+/**
+ * Review gates. On Temporal the workflow waits for a signal, so any API process can answer. On the
+ * in-process runner the run waits on a promise held here; if this process restarts, the run must
+ * be resumed and the gate is asked again.
+ */
+const reviewWaiters = new Map<string, (d: ReviewDecision) => void>();
+const onReview = (_gate: ReviewGate, runId: string) => new Promise<ReviewDecision>((resolve) => reviewWaiters.set(runId, resolve));
+
+export async function submitReview(runId: string, decision: ReviewDecision): Promise<void> {
+  if (temporal) return temporal.sendReview(runId, decision);
+  const resolve = reviewWaiters.get(runId);
+  if (!resolve) throw Object.assign(new Error("this API process is not running the run; resume it to be asked again"), { status: 409 });
+  reviewWaiters.delete(runId);
+  resolve(decision);
+}
 
 /** runIds currently executing in this process */
 const active = new Map<string, Promise<unknown>>();
@@ -70,6 +92,7 @@ async function launchRunUnlocked(input: RunInput): Promise<string> {
       input,
       onCreated: track,
       onEvent: () => void detect(),
+      ...(temporal ? {} : { onReview }),
     };
     const job: Promise<Manifest | void> = runner
       .start(opts)
@@ -101,7 +124,7 @@ async function launchRunUnlocked(input: RunInput): Promise<string> {
  */
 export async function launchResume(runId: string, from?: StageName): Promise<void> {
   if (active.has(runId)) throw Object.assign(new Error("run is already executing"), { status: 409 });
-  const opts: RunnerOptions & { runId: string; from?: StageName } = { runsRoot: RUNS_ROOT, runId, ...(from ? { from } : {}) };
+  const opts: RunnerOptions & { runId: string; from?: StageName } = { runsRoot: RUNS_ROOT, runId, ...(from ? { from } : {}), ...(temporal ? {} : { onReview }) };
   const job = runner.resume(opts).finally(() => active.delete(runId));
   active.set(runId, job);
   const early = await Promise.race([

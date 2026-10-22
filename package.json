@@ -8,13 +8,16 @@
   ],
   "scripts": {
     "reel": "tsx apps/cli/src/main.ts",
-    "typecheck": "tsc -p packages/core && tsc -p apps/cli",
+    "typecheck": "tsc -p packages/core && tsc -p packages/temporal && tsc -p apps/cli",
     "test": "vitest run",
     "dev:ui": "concurrently -k -n api,web -c blue,magenta \"npm run start -w @reel/api\" \"npm run dev -w @reel/web\"",
     "dev:ui:fake": "REEL_RUNNER=fake npm run dev:ui",
     "fake-runs": "npm run fake-runs -w @reel/api",
     "typecheck:ui": "tsc -p apps/api && tsc -p apps/web",
-    "build:ui": "npm run build -w @reel/web"
+    "build:ui": "npm run build -w @reel/web",
+    "temporal:server": "tsx packages/temporal/src/dev-server-main.ts",
+    "temporal:worker": "tsx packages/temporal/src/worker-main.ts",
+    "dev:ui:temporal": "REEL_RUNNER=temporal npm run dev:ui"
   },
   "engines": {
     "node": ">=22"

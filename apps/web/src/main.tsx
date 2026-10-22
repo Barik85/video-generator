@@ -21,7 +21,7 @@ createRoot(document.getElementById("root")!).render(
             <Route index element={<NewRunPage />} />
             <Route path="runs" element={<RunsPage />} />
             <Route path="runs/:runId" element={<RunDetailPage />} />
-            <Route path="*" element={<main className="mx-auto max-w-[1280px] px-6 py-8 text-muted">Сторінку не знайдено.</main>} />
+            <Route path="*" element={<main className="mx-auto max-w-[1280px] px-6 py-8 text-muted">Page not found.</main>} />
           </Route>
         </Routes>
       </BrowserRouter>

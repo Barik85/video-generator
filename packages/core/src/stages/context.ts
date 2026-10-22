@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RunStore } from "../run-store.ts";
+import { PRESETS, type AudioMode, type PresetName } from "../config.ts";
 import type { Providers } from "../providers/index.ts";
 import type { RunInput, StageName } from "../schemas.ts";
 import { BudgetExceededError, withRetry } from "../util/retry.ts";
@@ -9,6 +10,8 @@ export interface StageContext {
   store: RunStore;
   providers: Providers;
   input: RunInput;
+  /** How dialogue reaches the video: lip-sync to our TTS track, or spoken by the video model (see config.ts). */
+  audio: AudioMode;
   log(type: string, message: string, data?: Record<string, unknown>): Promise<void>;
   /**
    * Wraps a paid provider call: refuses to start it if the estimate would break the budget,
@@ -27,6 +30,7 @@ export function makeContext(stage: StageName, store: RunStore, providers: Provid
     store,
     providers,
     input,
+    audio: PRESETS[input.preset as PresetName]?.audio ?? "lipsync",
     log,
     async paid(what, estimateUsd, fn) {
       const spent = store.get().cost.totalUsd;

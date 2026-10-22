@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { Script } from "../schemas.ts";
+import { reviewNotes } from "../review.ts";
 import { PermanentError } from "../util/retry.ts";
 import { containsExact, extractQuotedLines } from "../util/text.ts";
 import type { StageContext } from "./context.ts";
@@ -11,10 +13,15 @@ const MAX_ATTEMPTS = 3;
  */
 export async function scriptStage(ctx: StageContext): Promise<Script> {
   const quotedLines = extractQuotedLines(ctx.input.idea);
+  const notes = reviewNotes(ctx.store, "script");
+  const review = notes.length
+    ? { notes, previous: existsSync(ctx.store.path("script.json")) ? await ctx.store.readJson<Script>("script.json") : null }
+    : undefined;
+  if (review) await ctx.log("info", `rewriting the script with ${notes.length} reviewer note(s)`);
   let feedback: string[] = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const { script } = await ctx.paid("script", 0.1, () =>
-      ctx.providers.llm.writeScript({ idea: ctx.input.idea, targetSeconds: ctx.input.targetSeconds, quotedLines, feedback }),
+      ctx.providers.llm.writeScript({ idea: ctx.input.idea, targetSeconds: ctx.input.targetSeconds, quotedLines, feedback, review }),
     );
     feedback = validateScript(script, quotedLines);
     if (feedback.length === 0) {

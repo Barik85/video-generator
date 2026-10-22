@@ -11,6 +11,8 @@ export interface ScriptRequest {
   quotedLines: string[];
   /** Validation errors from the previous attempt, fed back to the model. */
   feedback?: string[];
+  /** A human sent the script back: the script they saw and their notes, oldest first. */
+  review?: { previous: Script | null; notes: string[] };
 }
 
 export interface LlmProvider {
@@ -33,11 +35,16 @@ export interface VideoProvider {
   name: string;
   minSeconds: number;
   maxSeconds: number;
+  /** Set when the model accepts only specific lengths (e.g. Veo: 4, 6, 8); otherwise any whole second in [min, max]. */
+  durations?: readonly number[];
+  /** Whether the model takes a reference audio track (lip-sync to our TTS). Native-audio-only models do not. */
+  acceptsAudio: boolean;
   /** Price per output second, used for pre-flight budget checks. */
   usdPerSecond: number;
   generate(req: {
     prompt: string;
     imageFile: string;
+    /** Dialogue track to lip-sync to. Null means the model makes its own sound (silent shot or native-audio mode). */
     audioFile: string | null;
     seconds: number;
     outFile: string;

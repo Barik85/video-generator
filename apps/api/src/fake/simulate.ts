@@ -36,7 +36,16 @@ export interface Scenario {
   delayMs?: number;
 }
 
-const VIDEO_RATE: Record<string, number> = { mock: 0, "seedance-fast": 0.2419, "seedance-2.5": 0.3 };
+const VIDEO_RATE: Record<string, number> = {
+  mock: 0,
+  "mock-native": 0,
+  "seedance-fast": 0.2419,
+  "seedance-2.5": 0.473,
+  "or-seedance-lipsync": 0.091,
+  "or-seedance-native": 0.091,
+  "or-veo-native": 0.05,
+  "or-kling-native": 0.126,
+};
 const PALETTE: Array<[string, string]> = [
   ["0x1C2433", "0x7AA7FF"],
   ["0x2E1717", "0xF0A04B"],
@@ -77,7 +86,7 @@ async function execute(store: RunStore, sc: Scenario): Promise<Manifest> {
   const delay = sc.delayMs ?? 0;
   const input = store.get().input;
   const rate = VIDEO_RATE[input.preset] ?? 0.2419;
-  const paid = input.preset !== "mock";
+  const paid = !input.preset.startsWith("mock");
 
   const steps: Record<StageName, () => Promise<{ out: unknown; note: string }>> = {
     script: async () => {
@@ -177,10 +186,10 @@ async function execute(store: RunStore, sc: Scenario): Promise<Manifest> {
       const heardText = voice.lines.map((l) => l.asrText ?? "").join(" ");
       const w = wer(expectedText, heardText);
       const checks: QaOutput["checks"] = [
-        { name: "Дослівність (WER)", pass: w === 0, value: w.toFixed(2), expected: "0.00" },
-        { name: "Тривалість 8–30 с", pass: plan.totalSeconds >= 8 && plan.totalSeconds <= 30, value: `${plan.totalSeconds} с`, expected: "8–30 с" },
-        { name: "Формат 9:16", pass: true, value: "360×640", expected: "9:16" },
-        { name: "Аудіо-доріжка з TTS", pass: true, value: "так", expected: "так" },
+        { name: "Verbatim (WER)", pass: w === 0, value: w.toFixed(2), expected: "0.00" },
+        { name: "Duration 8–30 s", pass: plan.totalSeconds >= 8 && plan.totalSeconds <= 30, value: `${plan.totalSeconds} s`, expected: "8–30 s" },
+        { name: "Format 9:16", pass: true, value: "360×640", expected: "9:16" },
+        { name: "TTS audio track", pass: true, value: "yes", expected: "yes" },
       ];
       const out: QaOutput = { pass: checks.every((c) => c.pass), checks, expectedText, heardText, wer: w };
       if (paid) await store.addCost("qa", "ASR", 0.01);
@@ -232,15 +241,14 @@ async function read<T>(store: RunStore, stage: StageName): Promise<T> {
 /** Deterministic stand-in for the LLM: quoted text in the idea becomes the (locked) line. */
 export function scriptFromIdea(input: RunInput): Script {
   const quoted = input.idea.match(/[«"“]([^»"”]+)[»"”]/)?.[1]?.trim();
-  const uk = /[а-яіїєґ]/i.test(input.idea);
-  const text = quoted ?? (uk ? "Я знала, що ти повернешся." : "I knew you would come back.");
+  const text = quoted ?? "I knew you would come back.";
   const title = input.idea.split(/[.!?]/)[0]!.split(/\s+/).slice(0, 6).join(" ");
   return {
     title,
-    language: uk ? "uk" : "en",
+    language: "en",
     logline: input.idea.slice(0, 160),
     style: "cinematic, rainy neon night, 35mm, shallow depth of field",
-    characters: [{ id: "hero", name: uk ? "Героїня" : "Heroine", look: "woman, 30s, red raincoat, wet dark hair", voice: "female" }],
+    characters: [{ id: "hero", name: "Heroine", look: "woman, 30s, red raincoat, wet dark hair", voice: "female" }],
     lines: [{ id: "l1", characterId: "hero", text }],
     shots: [
       { id: "s1", visual: "Wide establishing shot of the location, rain, neon reflections.", camera: "slow push-in, wide", characterIds: ["hero"], lineIds: [], approxSeconds: 5 },

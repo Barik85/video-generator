@@ -1,7 +1,6 @@
 /**
  * Price table for the pre-run cost estimate (the only place prices live in the UI).
- * Sources: docs/research/facts.md (fal.ai, Oct 2026). Seedance 2.5 has no public price yet —
- * Seedance 2.0 Standard (~$0.30/s) is used as the estimate.
+ * Sources: fal.ai model pages and the OpenRouter video catalog (720p, 9:16, with audio), Oct 2026.
  */
 export const FIXED_COSTS = {
   script: 0.02, // LLM script + shot plan
@@ -26,30 +25,75 @@ export interface VideoModel {
 
 export const VIDEO_MODELS: Record<string, VideoModel> = {
   mock: {
-    name: "Mock (офлайн)",
-    how: "ffmpeg + macOS say, без API-ключів",
+    name: "Mock (offline)",
+    how: "ffmpeg + macOS say, no API keys",
     rate: 0,
     extra: 0,
-    price: "$0 · для перевірки пайплайна",
-    step: "Mock: статичні кадри + TTS-доріжка (ffmpeg)",
+    price: "$0 · for testing the pipeline",
+    step: "Mock: still frames + TTS track (ffmpeg)",
     paid: false,
   },
   "seedance-fast": {
     name: "Seedance 2.0 Fast",
-    how: "Губи під наше аудіо (@Audio1)",
+    how: "Lips follow our audio (@Audio1)",
     rate: 0.2419,
     extra: 0,
-    price: "$0.24/с · 720p",
-    step: "Seedance: відео з lip-sync під TTS-доріжку",
+    price: "$0.24/s · 720p",
+    step: "Seedance: video lip-synced to the TTS track",
     paid: true,
   },
   "seedance-2.5": {
     name: "Seedance 2.5",
-    how: "Вища якість, той самий lip-sync під TTS",
-    rate: 0.3,
+    how: "Higher quality, same lip-sync to TTS",
+    rate: 0.473,
     extra: 0,
-    price: "~$0.30/с · 720p (оцінка)",
-    step: "Seedance 2.5: відео з lip-sync під TTS-доріжку",
+    price: "$0.47/s · 720p",
+    step: "Seedance 2.5: video lip-synced to the TTS track",
+    paid: true,
+  },
+  "mock-native": {
+    name: "Mock, native audio",
+    how: "Offline stand-in for a model that speaks the line itself",
+    rate: 0,
+    extra: 0,
+    price: "$0 · for testing the pipeline",
+    step: "Mock: frames + \"model\" voice (macOS say)",
+    paid: false,
+  },
+  "or-seedance-lipsync": {
+    name: "Seedance 2.0 Fast · OpenRouter",
+    how: "Lips follow our TTS audio (@Audio1)",
+    rate: 0.091,
+    extra: 0,
+    price: "~$0.09/s · 720p",
+    step: "Seedance (OpenRouter): lip-sync to the TTS track",
+    paid: true,
+  },
+  "or-seedance-native": {
+    name: "Seedance 2.0 Fast · native audio",
+    how: "The model speaks the line itself, ASR checks it is verbatim",
+    rate: 0.091,
+    extra: 0,
+    price: "~$0.09/s · 720p",
+    step: "Seedance (OpenRouter): video with voice + ASR check",
+    paid: true,
+  },
+  "or-veo-native": {
+    name: "Veo 3.1 Lite · native audio",
+    how: "The model speaks the line itself; shots of 4/6/8 s",
+    rate: 0.05,
+    extra: 0,
+    price: "$0.05/s · 720p",
+    step: "Veo (OpenRouter): video with voice + ASR check",
+    paid: true,
+  },
+  "or-kling-native": {
+    name: "Kling v3 Std · native audio",
+    how: "The model speaks the line itself, ASR checks it is verbatim",
+    rate: 0.126,
+    extra: 0,
+    price: "$0.13/s · 720p",
+    step: "Kling (OpenRouter): video with voice + ASR check",
     paid: true,
   },
 };
@@ -58,11 +102,11 @@ export function modelFor(preset: string): VideoModel {
   return (
     VIDEO_MODELS[preset] ?? {
       name: preset,
-      how: "невідомий пресет",
+      how: "unknown preset",
       rate: 0.2419,
       extra: 0,
-      price: "ціна невідома",
-      step: `${preset}: генерація відео`,
+      price: "price unknown",
+      step: `${preset}: video generation`,
       paid: true,
     }
   );
@@ -82,10 +126,10 @@ export function estimate(preset: string, seconds: number): Estimate {
   const k = m.paid ? 1 : 0;
   const video = seconds * m.rate + m.extra;
   const lines = [
-    { label: "Сценарій + shot plan (LLM)", usd: FIXED_COSTS.script * k },
-    { label: "Озвучка (TTS)", usd: FIXED_COSTS.voice * k },
-    { label: "Ключові кадри (2)", usd: FIXED_COSTS.keyframes * k },
-    { label: `Відео ${seconds} с · ${m.name}`, usd: video },
+    { label: "Script + shot plan (LLM)", usd: FIXED_COSTS.script * k },
+    { label: "Voice (TTS)", usd: FIXED_COSTS.voice * k },
+    { label: "Keyframes (2)", usd: FIXED_COSTS.keyframes * k },
+    { label: `Video ${seconds} s · ${m.name}`, usd: video },
     { label: "QA (ASR + sync)", usd: FIXED_COSTS.qa * k },
   ];
   const total = lines.reduce((a, l) => a + l.usd, 0);

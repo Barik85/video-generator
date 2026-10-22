@@ -9,10 +9,10 @@ import { Badge, ErrorBox, buttonClass } from "../components/ui.tsx";
 type Filter = "all" | "running" | "done" | "failed";
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
-  { id: "all", label: "Усі" },
-  { id: "running", label: "У процесі" },
-  { id: "done", label: "Готово" },
-  { id: "failed", label: "Впали" },
+  { id: "all", label: "All" },
+  { id: "running", label: "Running" },
+  { id: "done", label: "Done" },
+  { id: "failed", label: "Failed" },
 ];
 
 export function RunsPage() {
@@ -34,7 +34,7 @@ export function RunsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-[28px] font-bold tracking-tight">Runs</h1>
         <Link to="/" className={buttonClass.primary}>
-          + Нова генерація
+          + New run
         </Link>
       </div>
 
@@ -59,24 +59,24 @@ export function RunsPage() {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-muted">
               <th scope="col" className="px-4 py-3 font-semibold">Run</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Ідея</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Статус</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Етап</th>
-              <th scope="col" className="px-4 py-3 text-right font-semibold">Тривалість</th>
-              <th scope="col" className="px-4 py-3 text-right font-semibold">Вартість</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Idea</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Stage</th>
+              <th scope="col" className="px-4 py-3 text-right font-semibold">Duration</th>
+              <th scope="col" className="px-4 py-3 text-right font-semibold">Cost</th>
               <th scope="col" className="px-4 py-3 font-semibold">Pipeline</th>
             </tr>
           </thead>
           <tbody>
             {runs.isPending && (
               <tr className="border-t border-line-soft">
-                <td colSpan={7} className="px-4 py-6 text-muted">Завантаження…</td>
+                <td colSpan={7} className="px-4 py-6 text-muted">Loading…</td>
               </tr>
             )}
             {runs.isSuccess && visible.length === 0 && (
               <tr className="border-t border-line-soft">
                 <td colSpan={7} className="px-4 py-6 text-muted">
-                  {rows.length === 0 ? "Ще немає жодного run. Запустіть першу генерацію або згенеруйте демо: npm run fake-runs -w @reel/api" : "Немає run з таким статусом."}
+                  {rows.length === 0 ? "No runs yet. Start one, or seed demo runs: npm run fake-runs -w @reel/api" : "No runs with this status."}
                 </td>
               </tr>
             )}
@@ -108,7 +108,7 @@ function Row({ m, s }: { m: RunSummary; s: RunStatusView }) {
       <td className="max-w-[260px] px-4 py-3.5 text-[13px] text-muted">
         <span className="line-clamp-2">{s.stage}</span>
       </td>
-      <td className="px-4 py-3.5 text-right font-mono text-[13px]">{m.input.targetSeconds} с</td>
+      <td className="px-4 py-3.5 text-right font-mono text-[13px]">{m.input.targetSeconds} s</td>
       <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono text-[13px]">
         {usd(m.cost.totalUsd)}
         <span className="text-faint"> / {usd(m.input.budgetUsd)}</span>
