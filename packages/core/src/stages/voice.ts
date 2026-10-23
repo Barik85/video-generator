@@ -26,6 +26,8 @@ export async function voiceStage(ctx: StageContext, script: Script): Promise<Voi
       continue;
     }
     const character = script.characters.find((c) => c.id === line.characterId)!;
+    const shot = script.shots.find((s) => s.lineIds.includes(line.id));
+    const direction = `${character.name}, ${character.look}. Scene: ${shot?.visual ?? script.logline} Mood and style: ${script.style}.`;
     let heard: string | null = null;
     let wer = 1;
     let takes = 0;
@@ -33,7 +35,7 @@ export async function voiceStage(ctx: StageContext, script: Script): Promise<Voi
       takes = take;
       const raw = ctx.store.path(`voice/${line.id}.take${take}.mp3`);
       await ctx.paid(`tts ${line.id} take ${take}`, 0.01, () =>
-        ctx.providers.tts.speak({ text: line.text, voice: character.voice, language: script.language, outFile: raw, attempt: take }),
+        ctx.providers.tts.speak({ text: line.text, voice: character.voice, language: script.language, outFile: raw, attempt: take, direction }),
       );
       await toCleanWav(raw, ctx.store.path(rel));
       const asr = await ctx.paid(`asr ${line.id} take ${take}`, 0.01, () =>

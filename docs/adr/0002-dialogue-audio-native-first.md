@@ -63,6 +63,29 @@ What the Ukrainian native run showed: Seedance's native speech in Ukrainian drif
 - When no take is verbatim, the closest take is kept and QA marks the run failed, rather than silently shipping a paraphrase.
 - Voice consistency for one character across shots is not guaranteed in native mode, because each shot is generated independently. With one speaking shot per character it was not an issue in the examples.
 
+## Ukrainian (2026-10-23)
+
+The same gas-station line, translated into Ukrainian: «Ти знаєш, що там. Не відкривай до ранку.» All tries went through OpenRouter.
+
+| Approach | Words (ASR) | How it sounds (human verdict) | Cost |
+|---|---|---|---|
+| Native, Seedance 2.0 Fast (`run_20261021114221_2d8d`) | ✗ 3 takes drifted toward Russian ("do ranka") | — | $2.19 |
+| Native, Kling v3 Std, one shot (`runs/_experiments/kling-uk`) | ✓ WER 0, first take | **accent** | $0.63 |
+| Lip-sync, ElevenLabs v3 voice "sarah" (`run_20261023072719_268b`, first version) | ✓ WER 0 | **unnatural**, even with the scene ambience mixed under it | $1.33 |
+| Dub: gpt-audio voice actor (coral) + Seedance `@Audio1` lip-sync + scene ambience (`runs/_experiments/uk-dub`) | ✓ the line checked by ASR before video spend | of three gpt-audio takes (two voices, two model sizes) this voice was preferred by ear; the final video is pending a listen | +$0.46 (one shot re-made) |
+
+Findings:
+- **ASR checks words, not pronunciation.** Kling passed with WER 0 and still has an accent. Accent and naturalness stay a manual check (Part 3 of the note).
+- **The ElevenLabs voices available through OpenRouter are 21 English premade voices.** No native Ukrainian voice, no cloning, no voice isolation. That, not lip-sync, is what made the Ukrainian lip-sync version sound foreign.
+- **A model that acts the line sounds closer to native.** gpt-audio gets the character and the scene as direction and plays the line; ASR still checks the words. This is the `or-seedance-dub` preset.
+- **The key ran out in the middle.** OpenRouter refuses audio requests below a $0.50 balance, so the dubbed version's final QA ASR did not run; it was assembled with the same functions, reusing the ambience verdicts of the earlier assemble of the same clips.
+- **Seedance rejected a photoreal close-up keyframe** ("may contain real person"). A keyframes redo with "no close-up faces" fixed it; there is no automatic handling yet.
+- **Too many shots for a short target.** For 8 s the script asked for 3 shots; at Seedance's 4 s minimum that is 13 s. The budget cap caught it.
+
+Decision for non-English lines: `or-seedance-dub`. Native only where a model is proven, by ear and not only by ASR, to speak the language without an accent.
+
+Production version: a dubbing stage with a voice cast of native speakers per character (or cloned from them), the scene's own background separated from the model's speech, and a dedicated lip-sync model on the finished clip (sync lipsync-2-pro or similar). Those tools need direct ElevenLabs and sync keys; none are on OpenRouter.
+
 ## Implementation status
 
 - Native mode, per-take ASR, the take limit and keeping the closest take: **implemented** (`packages/core/src/stages/video.ts`).
@@ -71,6 +94,6 @@ What the Ukrainian native run showed: Seedance's native speech in Ukrainian drif
 
 ## Revisit when
 
-- Dialogue must be in Ukrainian, or in another language where native speech fails. Then lipsync becomes the main path again, and its naturalness problem (dry TTS) needs a fix.
+- Dialogue must be in Ukrainian, or in another language where native speech fails: see "Ukrainian" above; the dub path (`or-seedance-dub`) is the current answer, a real dubbing stage the production one.
 - Native first-take pass rates drop on a larger sample. Four English shots is a small sample.
 - Seedance accepts a voice reference for native speech, which would fix voice consistency.

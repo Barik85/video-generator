@@ -91,7 +91,7 @@ const RUNNERS: Record<StageName, (ctx: StageContext, o: Partial<Outputs>) => Pro
   plan: (ctx, o) => planStage(ctx, o.script!, o.voice!),
   keyframes: (ctx, o) => keyframesStage(ctx, o.script!),
   video: (ctx, o) => videoStage(ctx, o.script!, o.plan!, o.keyframes!),
-  assemble: (ctx, o) => assembleStage(ctx, o.plan!, o.video!),
+  assemble: (ctx, o) => assembleStage(ctx, o.script!, o.plan!, o.video!),
   qa: (ctx, o) => qaStage(ctx, o.script!, o.plan!, o.assemble!),
 };
 

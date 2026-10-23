@@ -23,7 +23,15 @@ export interface LlmProvider {
 export interface TtsProvider {
   name: string;
   /** Writes raw audio (any format ffmpeg reads) to outFile. `attempt` lets providers vary settings on retry. */
-  speak(req: { text: string; voice: "female" | "male"; language: string; outFile: string; attempt: number }): Promise<Paid>;
+  speak(req: {
+    text: string;
+    voice: "female" | "male";
+    language: string;
+    outFile: string;
+    attempt: number;
+    /** Who says it and in what scene; providers that can act use it, the others ignore it. */
+    direction?: string;
+  }): Promise<Paid>;
 }
 
 export interface ImageProvider {

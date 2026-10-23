@@ -3,7 +3,7 @@ import { PRESETS, type PresetName } from "../config.ts";
 import { AnthropicLlm } from "./anthropic.ts";
 import { FalElevenTts, FalScribeAsr, FalSeedreamImage, seedance20Fast, seedance25 } from "./fal.ts";
 import { MockAsr, MockImage, MockLlm, MockTts, MockVideo } from "./mock.ts";
-import { OpenRouterAsr, OpenRouterImage, OpenRouterLlm, OpenRouterTts, OpenRouterVideo } from "./openrouter.ts";
+import { OpenRouterAsr, OpenRouterGptAudioTts, OpenRouterImage, OpenRouterLlm, OpenRouterTts, OpenRouterVideo } from "./openrouter.ts";
 import type { Providers } from "./types.ts";
 
 export type { Providers } from "./types.ts";
@@ -35,7 +35,7 @@ function build(p: (typeof PRESETS)[PresetName]): Providers {
     const id = (s: string) => s.replace(/^openrouter:/, "");
     return {
       llm: new OpenRouterLlm(id(p.llm)),
-      tts: new OpenRouterTts(id(p.tts)),
+      tts: id(p.tts).startsWith("openai/gpt-audio") ? new OpenRouterGptAudioTts(id(p.tts)) : new OpenRouterTts(id(p.tts)),
       image: new OpenRouterImage(id(p.image)),
       video: new OpenRouterVideo(id(p.video)),
       asr: new OpenRouterAsr(id(p.asr)),

@@ -3,6 +3,11 @@
  * punctuation and whitespace are ignored — that is all ASR can tell us reliably.
  */
 
+const LANGUAGES: Record<string, string> = { uk: "Ukrainian", en: "English", pl: "Polish", es: "Spanish", de: "German", fr: "French" };
+
+/** ISO 639-1 code → English language name for prompts ("uk" → "Ukrainian"). */
+export const languageName = (code: string) => LANGUAGES[code] ?? code;
+
 /** Lines the user put in quotes in the idea: these must survive into the script untouched. */
 export function extractQuotedLines(idea: string): string[] {
   const out: string[] = [];

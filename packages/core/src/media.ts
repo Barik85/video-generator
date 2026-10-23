@@ -56,12 +56,23 @@ export async function normalizeClip(input: string, seconds: number, output: stri
   await ffmpeg(["-i", input, "-vf", vf, "-t", String(seconds), "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", output]);
 }
 
-/** Concatenates normalized clips and lays the concatenated dialogue tracks under them. */
+const LOUDNESS = "I=-14:TP=-1.5:LRA=11";
+
+/**
+ * Concatenates normalized clips and lays the concatenated dialogue tracks under them. Loudness is
+ * measured first and then set with one gain: single-pass loudnorm is a compressor that would lift
+ * quiet ambience up to the level of the voice.
+ */
 export async function assemble(clips: string[], tracks: string[], output: string) {
+  const audioConcat = (offset: number) => tracks.map((_, i) => `[${offset + i}:a]`).join("") + `concat=n=${tracks.length}:v=0:a=1`;
+  const measured = await measureLoudness(tracks, audioConcat(0));
+  // One gain to -14 LUFS, then a peak limiter at -1.5 dBFS. (loudnorm's own linear mode gives up and
+  // compresses whenever that gain would clip TTS peaks, which is most of the time.)
+  const norm = measured ? `volume=${(-14 - Number(measured.input_i)).toFixed(2)}dB,alimiter=limit=0.84:level=false` : `loudnorm=${LOUDNESS}`;
   const inputs = [...clips, ...tracks].flatMap((f) => ["-i", f]);
   const n = clips.length;
   const v = clips.map((_, i) => `[${i}:v]`).join("") + `concat=n=${n}:v=1:a=0[v]`;
-  const a = tracks.map((_, i) => `[${n + i}:a]`).join("") + `concat=n=${n}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]`;
+  const a = `${audioConcat(n)},${norm}[a]`;
   await ffmpeg([
     ...inputs,
     "-filter_complex", `${v};${a}`,
@@ -73,9 +84,35 @@ export async function assemble(clips: string[], tracks: string[], output: string
   ]);
 }
 
+/** First loudnorm pass: measures the concatenated soundtrack. Null if ffmpeg does not report it (pure silence). */
+async function measureLoudness(tracks: string[], concat: string) {
+  const { stderr } = await run("ffmpeg", ["-hide_banner", "-nostats", ...tracks.flatMap((f) => ["-i", f]), "-filter_complex", `${concat},loudnorm=${LOUDNESS}:print_format=json`, "-f", "null", "-"]);
+  const json = stderr.slice(stderr.lastIndexOf("{"), stderr.lastIndexOf("}") + 1);
+  try {
+    const m = JSON.parse(json) as Record<string, string>;
+    return Number.isFinite(Number(m.input_i)) ? m : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The model's own soundtrack of a clip, cut/padded to exactly `seconds` (native-audio mode). */
 export async function clipAudio(input: string, seconds: number, output: string) {
   await ffmpeg(["-i", input, "-vn", "-af", "apad", "-t", String(seconds), "-ac", "1", "-ar", String(SR), output]);
+}
+
+/** Loops an ambience recording to exactly `seconds` (mono, 48 kHz). */
+export async function ambienceBed(source: string, seconds: number, output: string) {
+  await ffmpeg(["-stream_loop", "-1", "-i", source, "-t", String(seconds), "-ac", "1", "-ar", String(SR), output]);
+}
+
+/**
+ * Lip-sync mode: our dialogue track over the scene's ambience. A short, quiet echo puts the dry TTS
+ * voice into the room, and the bed is ducked 6 dB under the line.
+ */
+export async function voiceOverBed(voice: string, bed: string, seconds: number, output: string) {
+  const filter = "[0:a]aecho=1:1:35|70:0.12|0.06[v];[1:a]volume=0.5[b];[v][b]amix=inputs=2:normalize=0:duration=first[out]";
+  await ffmpeg(["-i", voice, "-i", bed, "-filter_complex", filter, "-map", "[out]", "-t", String(seconds), "-ac", "1", "-ar", String(SR), output]);
 }
 
 export async function extractAudio(input: string, output: string) {

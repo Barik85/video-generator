@@ -114,7 +114,12 @@ export type MediaOutput = z.infer<typeof MediaOutput>;
 
 // ---------- Stage 6–7: assemble, qa ----------
 
-export const AssembleOutput = z.object({ file: z.string(), seconds: z.number() });
+export const AssembleOutput = z.object({
+  file: z.string(),
+  seconds: z.number(),
+  /** Lip-sync mode: shots whose model audio (no words in it) became the scene ambience. */
+  ambienceFrom: z.array(z.string()).optional(),
+});
 export type AssembleOutput = z.infer<typeof AssembleOutput>;
 
 export const QaCheck = z.object({ name: z.string(), pass: z.boolean(), value: z.string(), expected: z.string() });

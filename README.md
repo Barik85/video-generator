@@ -25,6 +25,10 @@ The `mock` and `mock-native` presets (the default is `mock`) need no keys. They 
 - the voice sounds dry and detached from the scene: no room tone, rain or reverb;
 - the voice is picked by gender only, so a six-year-old boy got an adult male voice.
 
+**Other languages: dub** (`or-seedance-dub`). The same lip-sync path, but the line is played by a voice-actor model (OpenAI gpt-audio through OpenRouter) that gets the character and the scene as direction, instead of being read by an English ElevenLabs voice. Built for Ukrainian, where native video models either drift toward Russian (Seedance) or keep an accent (Kling), and the ElevenLabs voices on OpenRouter sound foreign.
+
+In lip-sync and dub modes the video model's own audio is dropped, because it carries the model's re-voicing of the line. Shots without dialogue keep their audio as scene ambience if ASR hears no words in it, and a loop of it goes under the dialogue.
+
 Switching to the fallback is manual for now: re-run with the lip-sync preset. Why and how this was decided: [ADR 0002](docs/adr/0002-dialogue-audio-native-first.md).
 
 `seedance-fast` and `seedance-2.5` are the first version of the pipeline (Claude direct plus fal.ai, lip-sync only). They are kept as legacy and need `ANTHROPIC_API_KEY` + `FAL_KEY`; [ADR 0001](docs/adr/0001-openrouter-as-single-gateway.md) explains the move to OpenRouter.

@@ -25,6 +25,9 @@ export const PRESETS = {
   mock: { llm: "mock", tts: "mock", image: "mock", video: "mock", asr: "mock", audio: "lipsync" },
   // Fallback for lines native audio cannot say verbatim (non-English, rare names). Sounds dry, voice by gender only.
   "or-seedance-lipsync": { ...OR, video: "openrouter:bytedance/seedance-2.0-fast", audio: "lipsync" },
+  // Dub for languages the video models cannot speak natively: a voice actor (gpt-audio) plays the line
+  // from the scene, ASR checks the words, Seedance lip-syncs to it. Chosen for Ukrainian (ADR 0002).
+  "or-seedance-dub": { ...OR, tts: "openrouter:openai/gpt-audio", video: "openrouter:bytedance/seedance-2.0-fast", audio: "lipsync" },
   // Legacy: the first version, Claude direct + fal.ai (ADR 0001 moved everything to OpenRouter).
   "seedance-fast": {
     llm: "anthropic",
