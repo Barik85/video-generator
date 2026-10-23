@@ -5,6 +5,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { PRESETS, REVIEW_GATES, ReviewDecision, RunInput, RunStore, STAGES, resumeRun, startRun } from "@reel/core";
+import { rate, report, runEval } from "./eval.ts";
 import type { Manifest, ReviewGate, RunEvent, Script, StageName } from "@reel/core";
 
 const USAGE = `reel — idea → vertical video
@@ -15,6 +16,10 @@ const USAGE = `reel — idea → vertical video
   reel review <runId> approve|redo|reject [--note "..."]   answer a paused run (Temporal server only)
   reel ls
   reel show <runId>
+  reel eval [--set evals/core.json] --preset <name> [--only a,b] [--budget 3] [--max-usd 10]
+                                            run a fixed set of test ideas (paid presets need --max-usd)
+  reel report [--eval core] [--preset <name>] [--json]   metrics of all runs by pipeline version × preset
+  reel rate <runId> <1-5> [--note "..."]    a person's score; report averages it
 
 Options: --runs <dir> (default ./runs), --json (print final manifest as JSON)
          --runner local|temporal (default $REEL_RUNNER or local). temporal: with TEMPORAL_ADDRESS
@@ -34,6 +39,10 @@ const { values, positionals } = parseArgs({
     from: { type: "string" },
     review: { type: "string", default: "" },
     note: { type: "string" },
+    set: { type: "string", default: "evals/core.json" },
+    only: { type: "string" },
+    "max-usd": { type: "string" },
+    eval: { type: "string" },
     runs: { type: "string", default: "runs" },
     runner: { type: "string", default: process.env.REEL_RUNNER === "temporal" ? "temporal" : "local" },
     json: { type: "boolean", default: false },
@@ -160,6 +169,20 @@ async function main() {
     await t.sendReview(arg, decision).finally(t.closeTemporal);
     console.log(`sent: ${decision.action} ${decision.gate}${decision.note ? ` (${decision.note})` : ""}`);
     return;
+  }
+  if (cmd === "eval") {
+    const runner = await loadRunner();
+    const maxUsd = values["max-usd"] === undefined ? undefined : Number(values["max-usd"]);
+    return runEval({ file: values.set!, preset: values.preset!, only: values.only, budget: Number(values.budget), maxUsd, runsRoot, startRun: runner.startRun }).finally(runner.close);
+  }
+  if (cmd === "report") {
+    // --preset defaults to "mock" for `run`; only filter by it when it was given explicitly.
+    const preset = process.argv.includes("--preset") ? values.preset : undefined;
+    return report({ runsRoot, evalSet: values.eval, preset, json: values.json! });
+  }
+  if (cmd === "rate") {
+    if (!arg || !action) throw new Error("rate needs a runId and a score 1–5");
+    return rate(runsRoot, arg, Number(action), values.note);
   }
   if (cmd === "ls") {
     for (const m of await RunStore.list(runsRoot)) {

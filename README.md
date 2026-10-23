@@ -37,6 +37,9 @@ npm run reel -- review <runId> approve|redo|reject [--note "..."]   # answer a p
 npm run reel -- resume <runId> [--from video]   # continue after a failure, or redo from a stage
 npm run reel -- ls
 npm run reel -- show <runId>
+npm run reel -- eval --preset mock-native            # the fixed test set (evals/core.json); paid presets need --max-usd
+npm run reel -- report [--eval core]                 # metrics of all runs by pipeline version × preset (reads files, costs nothing)
+npm run reel -- rate <runId> 1-5 [--note "..."]      # a person's score, averaged by report
 npm test
 ```
 
