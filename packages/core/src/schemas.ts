@@ -24,6 +24,8 @@ export const RunInput = z.object({
   budgetUsd: z.number().positive().default(8),
   /** Review gates to pause at (human-in-the-loop). Empty: fully autonomous. */
   review: z.array(ReviewGate).default([]),
+  /** Set by `reel eval`: "<set>/<case>", so runs of the same test case can be compared across versions. */
+  evalCase: z.string().optional(),
 });
 export type RunInput = z.infer<typeof RunInput>;
 

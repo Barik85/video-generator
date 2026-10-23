@@ -6,3 +6,5 @@ export { providersFor, missingKeys } from "./providers/index.ts";
 export { PermanentError } from "./util/retry.ts";
 export { requestReview, applyReview } from "./review.ts";
 export { errMsg } from "./stages/context.ts";
+export { runMetrics, summarize, type RunMetrics, type GroupSummary } from "./metrics.ts";
+export { extractQuotedLines } from "./util/text.ts";

@@ -4,7 +4,12 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { Manifest, RunEvent, STAGES, type ReviewDecision, type ReviewGate, type RunInput, type StageName, type StageRecord } from "./schemas.ts";
 
-export const PIPELINE_VERSION = "0.1.0";
+/**
+ * Bump on any change that can change the output (prompts, models, stage logic), so `reel report`
+ * compares versions rather than mixing them. 0.1.0 runs span several such changes (it was not bumped).
+ * 0.2.0: OpenRouter presets, native audio with per-take ASR, review gates.
+ */
+export const PIPELINE_VERSION = "0.2.0";
 
 const now = () => new Date().toISOString();
 

@@ -1,0 +1,54 @@
+{
+  "name": "core",
+  "description": "Fixed ideas, each aimed at one way the dialogue can fail to be verbatim. Change a case only together with a new set name, or old and new runs stop being comparable.",
+  "cases": [
+    {
+      "id": "gas-station",
+      "risk": "baseline: one speaker, two short sentences",
+      "seconds": 15,
+      "idea": "A night gas station in the rain. A girl in a red raincoat slides an envelope to the cashier and says: \"You know what is inside. Do not open it until morning.\""
+    },
+    {
+      "id": "rooftop-two-speakers",
+      "risk": "two speakers, each line must land in its own shot",
+      "seconds": 15,
+      "idea": "A rooftop at dawn over a sleeping city. A young man in a grey hoodie tells his sister: \"I sold the car. We leave tonight.\" She smiles and answers: \"Then I am driving.\""
+    },
+    {
+      "id": "wedding-child",
+      "risk": "child speaker: voice age, not only gender",
+      "seconds": 15,
+      "idea": "A sunny wedding reception on a rooftop. Just as the bride lifts her glass for a toast, a little boy tugs her dress, points at the groom, and loudly says: \"That's the man who was crying at my mom's grave yesterday.\""
+    },
+    {
+      "id": "numbers",
+      "risk": "numbers and times: models and ASR both like to rewrite them",
+      "seconds": 8,
+      "idea": "A crowded airport gate. A tired announcer leans into the microphone and says: \"Flight 407 to Lisbon now boards at gate 12, at 9:45.\""
+    },
+    {
+      "id": "rare-names",
+      "risk": "rare names the model may mispronounce or replace",
+      "seconds": 8,
+      "idea": "A hospital corridor at night. A nurse grabs a doctor's sleeve and whispers: \"Tell Siobhan that Mr. Kowalczyk woke up.\""
+    },
+    {
+      "id": "contractions",
+      "risk": "short contracted words and a dash: easy to drop or expand",
+      "seconds": 8,
+      "idea": "A kitchen at 3 a.m. A woman blocks the door and says: \"Don't. Not tonight. You can't — not after what he did.\""
+    },
+    {
+      "id": "long-line",
+      "risk": "a 25-word line close to the limit of one shot",
+      "seconds": 15,
+      "idea": "An empty theatre. An old actor sits on the edge of the stage and says to the last person in the hall: \"I have played kings and fools for forty years, and tonight, for the first time, I do not know which one I am.\""
+    },
+    {
+      "id": "no-quotes",
+      "risk": "no quoted line: the script writes the dialogue, so only the script-vs-audio check applies",
+      "seconds": 8,
+      "idea": "A lighthouse keeper finds a message in a bottle and reads it aloud to his dog."
+    }
+  ]
+}
