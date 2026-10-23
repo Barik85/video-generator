@@ -5,6 +5,7 @@ import { ffmpeg } from "../util/exec.ts";
 import { probe } from "../media.ts";
 import { Script } from "../schemas.ts";
 import { PermanentError } from "../util/retry.ts";
+import { languageName } from "../util/text.ts";
 import { SCRIPT_SYSTEM, scriptUserMessage } from "./script-prompt.ts";
 import type { AsrProvider, ImageProvider, LlmProvider, ScriptRequest, TtsProvider, VideoProvider } from "./types.ts";
 
@@ -138,6 +139,57 @@ export class OpenRouterTts implements TtsProvider {
     const res = await api("/audio/speech", json({ model, input: text, voice: VOICES[voice].toLowerCase(), response_format: "mp3" }));
     await writeFile(outFile, Buffer.from(await res.arrayBuffer()));
     return { usd: text.length * (PRICE.ttsPerChar[model] ?? 0.0001) };
+  }
+}
+
+/**
+ * A voice actor rather than a reader: OpenAI's gpt-audio gets the character and the scene and plays
+ * the line. Used for languages where the ElevenLabs voices on OpenRouter (English premade voices
+ * only) sound foreign; the words are still checked by ASR in the voice stage. Audio output is
+ * streaming-only (pcm16 chunks).
+ */
+const GPT_VOICES = { female: process.env.REEL_GPT_VOICE_FEMALE ?? "coral", male: process.env.REEL_GPT_VOICE_MALE ?? "ash" };
+
+export class OpenRouterGptAudioTts implements TtsProvider {
+  constructor(private model: string) {}
+  get name() {
+    return `openrouter:${this.model}`;
+  }
+
+  async speak({ text, voice, language, outFile, direction }: Parameters<TtsProvider["speak"]>[0]) {
+    const lang = languageName(language);
+    const res = await api(
+      "/chat/completions",
+      json({
+        model: this.model,
+        stream: true,
+        modalities: ["text", "audio"],
+        audio: { voice: GPT_VOICES[voice], format: "pcm16" },
+        usage: { include: true },
+        messages: [
+          {
+            role: "system",
+            content: `You are a voice actor dubbing a film into ${lang}. You are a native ${lang} speaker: pure native pronunciation, no foreign accent. Say exactly the line the user gives, word for word, once, and nothing else.`,
+          },
+          { role: "user", content: `${direction ? `Character and scene: ${direction}\n` : ""}Line:\n${text}` },
+        ],
+      }),
+    );
+    const chunks: Buffer[] = [];
+    let usd = 0;
+    for (const line of (await res.text()).split("\n")) {
+      if (!line.startsWith("data: ") || line.includes("[DONE]")) continue;
+      const j = JSON.parse(line.slice(6)) as { choices?: Array<{ delta?: { audio?: { data?: string } } }>; usage?: { cost?: number } };
+      const data = j.choices?.[0]?.delta?.audio?.data;
+      if (data) chunks.push(Buffer.from(data, "base64"));
+      if (j.usage?.cost) usd = j.usage.cost;
+    }
+    if (!chunks.length) throw new Error(`${this.model} returned no audio`);
+    const pcm = `${outFile}.pcm`;
+    await writeFile(pcm, Buffer.concat(chunks));
+    await ffmpeg(["-f", "s16le", "-ar", "24000", "-ac", "1", "-i", pcm, outFile]);
+    await rm(pcm, { force: true });
+    return { usd: usd || 0.01 };
   }
 }
 

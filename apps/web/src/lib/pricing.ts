@@ -74,6 +74,16 @@ export const VIDEO_MODELS: Record<string, VideoModel> = {
     paid: true,
     tag: "fallback",
   },
+  "or-seedance-dub": {
+    name: "Seedance 2.0 Fast · dub",
+    how: "For non-English lines: a voice actor model (GPT Audio) plays the line, ASR checks it, lips follow it",
+    rate: 0.091,
+    extra: 0,
+    price: "~$0.09/s · 720p",
+    step: "Seedance (OpenRouter): lip-sync to the acted voice track",
+    paid: true,
+    tag: "fallback",
+  },
   "or-seedance-native": {
     name: "Seedance 2.0 Fast · native audio",
     how: "The model speaks the line itself, ASR checks it is verbatim",

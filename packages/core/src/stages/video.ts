@@ -2,14 +2,12 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { clipAudio, extractAudio, normalizeClip, probe } from "../media.ts";
 import type { MediaOutput, PlanOutput, PlannedShot, Script, Shot } from "../schemas.ts";
-import { wordErrorRate } from "../util/text.ts";
+import { languageName, wordErrorRate } from "../util/text.ts";
 import type { StageContext } from "./context.ts";
 
 const MAX_WER = Number(process.env.REEL_MAX_WER ?? 0);
 /** Native-audio mode only: how many paid takes a shot gets before we keep the best one. */
 const MAX_TAKES = Number(process.env.REEL_VIDEO_TAKES ?? 3);
-
-const LANGUAGES: Record<string, string> = { uk: "Ukrainian", en: "English", pl: "Polish", es: "Spanish", de: "German", fr: "French" };
 
 /**
  * Keyframe (+ dialogue track in lip-sync mode) → clip. Each shot and each take is checkpointed on
@@ -116,7 +114,7 @@ export function videoPrompt(script: Script, shot: Shot, hasDialogue: boolean): s
 export function nativeVideoPrompt(script: Script, shot: Shot, plan: PlannedShot): string {
   const lines = plan.cues.map((c) => script.lines.find((l) => l.id === c.lineId)!);
   const who = script.characters.find((c) => c.id === lines[0]?.characterId);
-  const language = LANGUAGES[script.language] ?? script.language;
+  const language = languageName(script.language);
   return [
     `The first frame is the reference for the characters and setting; keep their appearance identical.`,
     `${shot.visual}. Camera: ${shot.camera}. Style: ${script.style}.`,
